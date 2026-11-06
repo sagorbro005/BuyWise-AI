@@ -1,0 +1,17 @@
+node_modules/
+.next/
+dist/
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+artifacts/
+.npm-cache/
+# Local reference documents and extracted notes are not application source.
+BuyWise_AI_Zero_Cost_Implementation_Handbook.docx
+docx_remaining.txt
