@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStore } from '../src/server/store.mjs';
 import { createService } from '../src/server/service.mjs';
-import { inspectListing, attackListing } from '../src/core/catalog.mjs';
+import { inspectListing, attackListing, catalog } from '../src/core/catalog.mjs';
+import { categoryIds } from '../src/core/categories.mjs';
 
 function setup(t) {
   const store = createStore(':memory:'); t.after(() => store.close());
@@ -42,6 +43,31 @@ function setup(t) {
     webhook: orderId => ({ id: 'EVENT-1', event_type: 'PAYMENT.CAPTURE.COMPLETED', resource: { id: 'CAPTURE-1', amount: { currency_code: 'USD', value: '245.00' }, supplementary_data: { related_ids: { order_id: orderId } } } }),
   };
 }
+
+test('each mandate category offers distinct, priced alternatives and enforces the saved seller list', async t => {
+  const s = setup(t);
+  assert.equal(new Set(catalog.map(p => p.id)).size, catalog.length);
+  for (const category of categoryIds) {
+    const options = catalog.filter(p => p.category === category);
+    assert.ok(new Set(options.map(p => p.unitPriceCents)).size >= 3);
+    const chosen = options[1];
+    const service = createService(s.store, s.provider, async ({ products }) => {
+      assert.deepEqual(new Set(products.map(p => p.id)), new Set(options.map(p => p.id)));
+      return { productId: chosen.id, quantity: 1, explanation: chosen.description };
+    }, () => 1000);
+    const fields = { category, budgetCents: 30000, maxQuantity: 5 };
+    service.saveMandate('alice', { ...fields, merchantIds: [] });
+    const denied = await service.research('alice', 'Compare options for my desk');
+    assert.ok(denied.decision.reasons.includes('MERCHANT_NOT_ALLOWED'));
+    assert.throws(() => service.reserve('alice', { productId: chosen.id, quantity: 1 }), /MERCHANT_NOT_ALLOWED/);
+    service.saveMandate('alice', fields);
+    const match = await service.research('alice', 'Compare options for my desk');
+    const intent = service.reserve('alice', { recommendationId: match.recommendationId });
+    assert.equal(intent.totalCents, chosen.unitPriceCents);
+    service.cancel('alice', intent.id);
+  }
+  assert.deepEqual(s.counts(), { creates: 0, captures: 0 });
+});
 
 test('cap, seller selection, expiration and revocation enforce the configured permissions', t => {
   const s = setup(t);

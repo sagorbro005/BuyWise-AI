@@ -1,11 +1,13 @@
 import { z } from 'zod';
+import { categoryIds } from '../core/categories.mjs';
+const requestCategories = [...categoryIds, 'other'];
 
 export class AppError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
 }
 const requestSchema = z.object({
   productQuery: z.string().trim().min(1).max(300),
-  category: z.enum(['keyboards', 'mice', 'headsets', 'other']),
+  category: z.enum(requestCategories),
   quantity: z.number().int().positive().max(100).nullable(),
   budgetCents: z.number().int().positive().max(100000000).nullable(),
   currency: z.string().regex(/^[A-Z]{3}$/).nullable(),
@@ -14,7 +16,7 @@ const requestSchema = z.object({
 const proposalSchema = z.object({ parsedRequest: requestSchema, productId: z.string().min(1).max(100), quantity: z.number().int().positive().max(100), explanation: z.string().min(1).max(1500) }).strict();
 // Use the provider's JSON Schema subset. Apply stricter bounds locally.
 const parsedFields = {
-  productQuery: { type: 'string' }, category: { type: 'string', enum: ['keyboards', 'mice', 'headsets', 'other'] },
+  productQuery: { type: 'string' }, category: { type: 'string', enum: requestCategories },
   quantity: { type: ['integer', 'null'] }, budgetCents: { type: ['integer', 'null'] },
   currency: { type: ['string', 'null'] }, requirements: { type: 'array', items: { type: 'string' } },
 };

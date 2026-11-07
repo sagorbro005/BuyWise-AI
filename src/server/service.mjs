@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { catalog, discover, attackListing, inspectListing } from '../core/catalog.mjs';
 import { evaluatePurchase } from '../core/policy.mjs';
+import { categoryIds } from '../core/categories.mjs';
 import { AppError, recommend, paypalProvider } from './providers.mjs';
 import { sealDecision, verifyDecision } from './decision-evidence.mjs';
 
@@ -11,7 +12,7 @@ const mandateInput = z.object({
   maxPurchaseCents: z.number().int().positive().optional(),
   durationHours: z.number().int().min(1).max(168).default(24),
   maxQuantity: z.number().int().min(1).max(50),
-  category: z.enum(['keyboards', 'mice', 'headsets']),
+  category: z.enum(categoryIds),
   merchantIds: z.array(z.literal('buywise-sandbox')).max(1).default(['buywise-sandbox']),
 }).strict().refine(m => (m.maxPurchaseCents ?? m.budgetCents) <= m.budgetCents);
 const proposalInput = z.object({ productId: z.string().min(1).max(100), quantity: z.number().int().min(1).max(100), explanation: z.string().max(1500).optional() }).strict();

@@ -52,6 +52,28 @@ try {
   await page.getByRole('button', { name: 'Confirm mandate' }).click();
   await page.getByRole('button', { name: 'Update mandate' }).waitFor();
   await otherTab.close();
+  await page.locator('#category').selectOption('webcams');
+  await page.locator('#cap').fill('');
+  await page.locator('#hours').fill('');
+  await page.locator('#policy-name').fill('');
+  await page.locator('#allow-seller').uncheck();
+  await page.getByRole('button', { name: 'Update mandate' }).click();
+  await page.waitForFunction(() => document.querySelector('#policy-name')?.value === 'Office purchasing');
+  const saved = await page.evaluate(async () => (await (await fetch('/api/bootstrap')).json()).mandate);
+  assert.deepEqual(saved.merchantIds, []);
+  assert.equal(saved.maxPurchaseCents, saved.budgetCents);
+  assert.equal(saved.durationHours, 24);
+  assert.equal(await page.locator('.product-card').count(), 3);
+  const shutter = page.locator('.product-card').filter({ hasText: 'Shutter HD' });
+  await shutter.getByRole('button', { name: 'Review purchase' }).click();
+  await page.getByRole('alert').filter({ hasText: 'MERCHANT_NOT_ALLOWED' }).waitFor();
+  await page.locator('#allow-seller').check();
+  await page.getByRole('button', { name: 'Update mandate' }).click();
+  await page.getByRole('status').filter({ hasText: 'Mandate confirmed' }).waitFor();
+  await shutter.getByRole('button', { name: 'Review purchase' }).click();
+  await page.getByRole('heading', { name: 'Review your purchase' }).waitFor();
+  assert.match(await page.locator('.checkout-summary').innerText(), /\$195\.00/);
+  await page.getByRole('button', { name: 'Cancel purchase' }).click();
   console.log('Browser passed: filtered CSV export, mandate, attack, purchase review, cancellation, audit search, cross-tab revocation and reactivation.');
 } finally {
   await browser.close();
