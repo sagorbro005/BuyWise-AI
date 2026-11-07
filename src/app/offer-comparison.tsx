@@ -21,9 +21,30 @@ const dollars = (cents: number) => (cents / 100).toLocaleString('en-US', { style
 const reasons = (codes: string[]) => codes.map(code => code.toLowerCase().replaceAll('_', ' ')).join(', ');
 function productFit(row: Offer) {
   if (row.requestReasons.includes('REQUEST_CATEGORY_MISMATCH')) return 'Different category';
+  if (row.requestReasons.includes('REQUEST_PRODUCT_MISMATCH')) return 'Different product from the named request';
   if (!row.features.length) return row.description;
   return row.features.map(f => f.evidence ? `${f.feature}: “${f.evidence}”` : `${f.feature}: unconfirmed`).join(' · ');
 }
+export function OfferGrid({ rows, basket = false, selectedId, selectionLabel }: {
+  rows: Offer[]; basket?: boolean; selectedId?: string; selectionLabel?: string;
+}) {
+  return (<AgGridReact<Offer> domLayout="autoHeight" theme={themeQuartz.withParams({
+      backgroundColor: 'var(--surface)', foregroundColor: 'var(--ink)', borderColor: 'var(--border)', headerBackgroundColor: 'var(--inset)',
+    })} rowData={rows} getRowId={p => p.data.productId}
+      defaultColDef={{ sortable: true, resizable: true, wrapText: true, autoHeight: true }}
+      columnDefs={[
+        { field: 'name', headerName: 'Product', minWidth: 140, cellRenderer: (p: { data?: Offer }) => <span>{p.data?.name}{p.data?.productId === selectedId && <strong className="comparison-selection"> · {selectionLabel}</strong>}</span> },
+        { field: 'totalCents', headerName: basket ? 'Line total' : 'Total', width: 98, valueFormatter: p => dollars(p.value) },
+        { headerName: 'Product fit · listing evidence', minWidth: 220, flex: 1, valueGetter: p => p.data && productFit(p.data) },
+        { headerName: basket ? 'Line budget' : 'Request budget', width: 150, valueGetter: p => {
+          if (p.data?.requestReasons.includes('REQUEST_CURRENCY_MISMATCH')) return 'Currency mismatch';
+          const over = p.data?.overBudgetCents;
+          return over == null ? 'Unspecified' : over ? `${dollars(over)} over` : 'Within budget';
+        } },
+        { headerName: basket ? 'Line policy' : 'Mandate check', width: 155, valueGetter: p => p.data && (reasons(p.data.policyReasons) || 'Allowed') },
+      ]}/>);
+}
+
 export default function OfferComparison({ result, busy, review, clear }: {
   result: Research; busy: boolean; review: (id: string) => void; clear: () => void;
 }) {
@@ -34,21 +55,7 @@ export default function OfferComparison({ result, busy, review, clear }: {
     {result.outcome === 'blocked' && <p role="status">AgentGuard blocked this recommendation under the current mandate.</p>}
     <p className="muted">Comparing {request.quantity ?? 1} unit(s) · {request.productQuery}
       {request.budgetCents !== null && ` · Request budget ${(request.budgetCents / 100).toFixed(2)} ${request.currency ?? 'USD'}`}</p>
-    <AgGridReact<Offer> domLayout="autoHeight" theme={themeQuartz.withParams({
-      backgroundColor: 'var(--surface)', foregroundColor: 'var(--ink)', borderColor: 'var(--border)', headerBackgroundColor: 'var(--inset)',
-    })} rowData={result.rows} getRowId={p => p.data.productId}
-      defaultColDef={{ sortable: true, resizable: true, wrapText: true, autoHeight: true }}
-      columnDefs={[
-        { field: 'name', headerName: 'Product', minWidth: 140 },
-        { field: 'totalCents', headerName: 'Total', width: 98, valueFormatter: p => dollars(p.value) },
-        { headerName: 'Product fit · listing evidence', minWidth: 220, flex: 1, valueGetter: p => p.data && productFit(p.data) },
-        { headerName: 'Request budget', width: 150, valueGetter: p => {
-          if (p.data?.requestReasons.includes('REQUEST_CURRENCY_MISMATCH')) return 'Currency mismatch';
-          const over = p.data?.overBudgetCents;
-          return over == null ? 'Unspecified' : over ? `${dollars(over)} over` : 'Within budget';
-        } },
-        { headerName: 'Mandate check', width: 155, valueGetter: p => p.data && (reasons(p.data.policyReasons) || 'Allowed') },
-      ]}/>
+    <OfferGrid rows={result.rows}/>
     <div className="checkout-actions">
       {result.outcome === 'match' && result.recommendationId && <button type="button" className="button primary" disabled={busy}
         onClick={() => result.recommendationId && review(result.recommendationId)}>Review {result.rows.find(row => row.productId === result.proposal?.productId)?.name}</button>}

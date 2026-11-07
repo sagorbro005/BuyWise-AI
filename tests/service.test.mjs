@@ -23,6 +23,9 @@ function setup(t) {
       creates++;
       const id = `ORDER-${intent.id}`;
       if (!orders.has(id)) orders.set(id, { id, status: 'CREATED', intent: 'CAPTURE', purchase_units: [{ custom_id: intent.id, payee: { merchant_id: 'merchant-1' }, amount: { currency_code: 'USD', value: (intent.totalCents / 100).toFixed(2) } }] });
+      if (intent.lines) orders.get(id).purchase_units[0].items = intent.lines.map(({ product, quantity }) => ({
+        sku: product.id, quantity: String(quantity), unit_amount: { currency_code: 'USD', value: (product.unitPriceCents / 100).toFixed(2) },
+      }));
       return structuredClone(orders.get(id));
     },
     async get(id) {
@@ -374,4 +377,124 @@ test('completed spending remains counted after a new mandate', async t => {
   const s = setup(t); const intent = s.reserve(); const order = await s.service.createOrder('alice', intent.id); s.approve(order.orderId); await s.service.capture('alice', intent.id);
   s.service.saveMandate('alice', { budgetCents: 30000, maxQuantity: 5, category: 'keyboards' });
   assert.throws(s.reserve, /BUDGET_EXCEEDED/);
+});
+
+const mixedRules = { categories: ['keyboards', 'mice'], categoryLimits: { keyboards: 5, mice: 3 },
+  maxQuantity: 8, budgetCents: 30000, maxPurchaseCents: 30000 };
+const exampleBasket = { lines: [{ productId: 'hush-75', quantity: 5 }, { productId: 'desk-mouse', quantity: 3 }] };
+
+test('mixed basket reserves once and completes one order, capture and verified event', async t => {
+  const s = setup(t);
+  s.service.saveMandate('alice', mixedRules);
+  const intent = s.service.reserve('alice', exampleBasket);
+  assert.equal(intent.totalCents, 28700);
+  assert.equal(intent.quantity, 8);
+  assert.equal(s.service.snapshot('alice').reservedCents, 28700);
+  assert.throws(() => s.service.reserve('alice', exampleBasket), /blocked|open purchase/i);
+  const order = await s.service.createOrder('alice', intent.id);
+  s.approve(order.orderId);
+  await s.service.capture('alice', intent.id);
+  const event = s.webhook(order.orderId);
+  event.resource.amount.value = '287.00';
+  await s.service.webhook(new Headers(), event);
+  await s.service.webhook(new Headers(), event);
+  const state = s.service.snapshot('alice');
+  assert.equal(state.spentCents, 28700);
+  assert.equal(state.reservedCents, 0);
+  assert.equal(state.intents[0].webhookVerified, true);
+  assert.deepEqual(s.counts(), { creates: 1, captures: 1 });
+});
+
+test('basket rejects combined cap, counts across repeated SKUs, unauthorized lines and stale checkout', async t => {
+  const s = setup(t);
+  for (const [rules, expected] of [
+    [{ ...mixedRules, maxPurchaseCents: 25000 }, /PURCHASE_LIMIT_EXCEEDED/],
+    [{ ...mixedRules, maxQuantity: 7 }, /QUANTITY_NOT_ALLOWED/],
+    [{ ...mixedRules, categories: ['keyboards'], categoryLimits: {} }, /CATEGORY_NOT_ALLOWED/],
+    [{ ...mixedRules, merchantIds: [] }, /MERCHANT_NOT_ALLOWED/],
+  ]) {
+    s.service.saveMandate('alice', rules);
+    assert.throws(() => s.service.reserve('alice', exampleBasket), expected);
+    assert.equal(s.service.snapshot('alice').reservedCents, 0);
+  }
+  s.service.saveMandate('alice', mixedRules);
+  assert.throws(() => s.service.reserve('alice', { lines: [exampleBasket.lines[0], { productId: 'everyday-keys', quantity: 1 }] }), /CATEGORY_QUANTITY_EXCEEDED/);
+  assert.throws(() => s.service.reserve('alice', { lines: [{ ...exampleBasket.lines[0], price: 1 }] }));
+  const i = s.service.reserve('alice', exampleBasket);
+  s.service.revoke('alice');
+  await assert.rejects(s.service.createOrder('alice', i.id));
+  assert.deepEqual(s.counts(), { creates: 0, captures: 0 });
+});
+
+test('AI chooses a feasible combination and never reserves a partial result', async t => {
+  const s = setup(t);
+  let budget = 30000;
+  let missing = false;
+  const ai = async ({ products }) => ({
+    lines: ['keyboards', 'mice'].map((category, index) => {
+      const list = products.filter(p => p.category === category);
+      const answer = ranking(list, index ? 'glide-mouse' : 'hush-75', index ? 3 : 5);
+      if (missing && index) { answer.parsedRequest.requirements = ['unlisted feature']; answer.rankedOffers.forEach(o => { o.evidence = [null]; }); }
+      return answer;
+    }), basketBudgetCents: budget, basketCurrency: 'USD',
+  });
+  const svc = createService(s.store, s.provider, ai, () => 1000);
+  svc.saveMandate('alice', mixedRules);
+  const found = await svc.research('alice', 'Five keyboards and three mice');
+  assert.equal(found.outcome, 'match');
+  assert.equal(found.entries.length, 2);
+  assert.ok(found.decision.totalCents <= budget);
+  const i = svc.reserve('alice', { recommendationId: found.recommendationId });
+  assert.equal(svc.reserve('alice', { recommendationId: found.recommendationId }).id, i.id);
+  svc.cancel('alice', i.id);
+  budget = 20000;
+  const denied = await svc.research('alice', 'Both categories under two hundred dollars');
+  assert.equal(denied.outcome, 'blocked');
+  assert.equal(denied.recommendationId, null);
+  missing = true;
+  const none = await svc.research('alice', 'Also require unlisted feature on mice');
+  assert.equal(none.outcome, 'no_match');
+  assert.deepEqual(none.entries, []);
+  assert.equal(svc.snapshot('alice').reservedCents, 0);
+});
+
+test('a counted product cannot be substituted to fit a lower basket cap', async t => {
+  const s = setup(t);
+  const ai = async ({products}) => ({
+    lines: ['keyboards', 'mice'].map((cat, idx) => ranking(products.filter(p => p.category === cat), idx ? 'desk-mouse' : 'everyday-keys', idx ? 3 : 5)),
+    basketBudgetCents: 30000, basketCurrency: 'USD',
+  });
+  const svc = createService(s.store, s.provider, ai, () => 1000);
+  svc.saveMandate('alice', { ...mixedRules, maxPurchaseCents: 25000 });
+  const result = await svc.research('alice', '5 Hush 75 Wireless keyboards and 3 Desk USB Mouse');
+  assert.equal(result.outcome, 'blocked');
+  assert.equal(result.decision.totalCents, 28700);
+  assert.match(result.message, /37.00/);
+  await assert.rejects(svc.research('alice', '5 keyboards and 4 mice'), /every requested item/);
+});
+
+test('same-total PayPal basket with substituted or missing items cannot capture', async t => {
+  const s = setup(t);
+  s.service.saveMandate('alice', mixedRules);
+  const i = s.service.reserve('alice', exampleBasket);
+  const order = await s.service.createOrder('alice', i.id);
+  s.approve(order.orderId);
+  const unit = s.orders.get(order.orderId).purchase_units[0];
+  unit.items[0].sku = 'another-keyboard';
+  await assert.rejects(s.service.capture('alice', i.id), /basket items/);
+  delete unit.items;
+  await assert.rejects(s.service.capture('alice', i.id), /details are missing/);
+  assert.equal(s.counts().captures, 0);
+});
+
+test('duplicate basket lines cannot bypass combined stock and stale basket amounts cannot capture', async t => {
+  const s = setup(t);
+  s.service.saveMandate('alice', { categories: ['keyboards', 'mice'], maxQuantity: 50, budgetCents: 100000 });
+  assert.throws(() => s.service.reserve('alice', {lines:[{productId:'rise-mouse',quantity:8},{productId:'rise-mouse',quantity:8}]}), /INSUFFICIENT_STOCK/);
+  const i = s.service.reserve('alice', exampleBasket);
+  const order = await s.service.createOrder('alice', i.id);
+  s.approve(order.orderId);
+  s.advance(16 * 60000);
+  await assert.rejects(s.service.capture('alice', i.id), /expired/);
+  assert.equal(s.counts().captures, 0);
 });

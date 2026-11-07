@@ -17,6 +17,8 @@ The purchasing assistant now compares every candidate in the approved category i
 
 ## Run locally
 
+**Mixed basket example.** Set the primary category to Keyboards and enable Mice under Additional allowed categories. Set the maximum total units to 8, and the budget and per-purchase cap to $300. Optionally cap keyboards at 5 and mice at 3. Save the mandate. Ask for “5 Hush 75 Wireless keyboards and 3 Desk USB Mouse mice,” or enter those quantities in Build a basket. Review the two lines together: $245 + $42 = $287. A $250 cap blocks that exact basket. Buyer approval, capture, cancellation and the audit record apply to the entire order. Each basket supports up to six requested lines from the BuyWise sandbox seller.
+
 The [6 November handbook audit](docs/HANDBOOK_AUDIT.md) maps all twelve P0 capabilities to observed results and open release gates. The [test plan](docs/TEST_PLAN.md) includes the browser acceptance command.
 
 The [rules and prize review](docs/RULES_AND_PRIZES.md) maps submission requirements, sponsor choices and the no-cost boundary. AG Grid Community is the current sponsor target. Using a sponsor tool does not guarantee a prize. See [third-party notices](THIRD_PARTY_NOTICES.md).

@@ -1,6 +1,31 @@
 import { AppError } from './providers.mjs';
+import { catalog } from '../core/catalog.mjs';
 
 const usd = cents => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+
+// Preserve explicit counted items such as "5 Hush 75 Wireless" or "3 mice".
+// Gemini handles the rest of the language. An ambiguous mapping needs clarification.
+export function preserveCountedItems(query, lines) {
+  const aliases = { keyboards: 'keyboards?', mice: 'mice|mouse', headsets: 'headsets?', webcams: 'webcams?', hubs: '(?:USB )?hubs?', monitors: 'monitors?' };
+  const names = catalog.map(p => ({ pattern: p.name, category: p.category, product: p }));
+  const terms = [...names, ...Object.entries(aliases).map(([category, pattern]) => ({ category, pattern }))];
+  for (const { category, pattern, product } of terms) {
+    const regex = new RegExp(`(?:^|[^$\\w.])(\\d+)\\s*(?:[x×]\\s*)?(?:${pattern})\\b`, 'gi');
+    for (const match of query.matchAll(regex)) {
+      const count = Number(match[1]);
+      let candidates = lines.filter(l => l.parsedRequest.category === category && (l.parsedRequest.quantity ?? 1) === count);
+      if (product && candidates.length > 1) {
+        candidates = candidates.filter(l => l.parsedRequest.productQuery.toLowerCase().includes(product.name.toLowerCase()));
+      }
+      if (candidates.length !== 1) throw new AppError('The comparison could not identify every requested item and quantity. Please name each item on a separate line.', 409);
+      if (product) {
+        const request = candidates[0].parsedRequest;
+        if (request.requiredProductId && request.requiredProductId !== product.id) throw new AppError('Two requested products were combined into one line. Please list them separately.', 409);
+        request.requiredProductId = product.id;
+      }
+    }
+  }
+}
 
 export function compareOffers(products, answer, evaluate) {
   const { parsedRequest, rankedOffers } = answer;
@@ -25,7 +50,8 @@ export function compareOffers(products, answer, evaluate) {
     const { reasons, totalCents } = checked.decision;
     const policyReasons = reasons.filter(reason => !reason.startsWith('REQUEST_'));
     const requestReasons = reasons.filter(reason => reason.startsWith('REQUEST_'));
-    const featureFit = product.category === parsedRequest.category && features.every(f => f.evidence);
+    if (parsedRequest.requiredProductId && product.id !== parsedRequest.requiredProductId) requestReasons.push('REQUEST_PRODUCT_MISMATCH');
+    const featureFit = product.category === parsedRequest.category && !requestReasons.includes('REQUEST_PRODUCT_MISMATCH') && features.every(f => f.evidence);
     const row = {
       productId: product.id, name: product.name, description: product.description, quantity,
       totalCents, features, featureFit, requestReasons, policyReasons,

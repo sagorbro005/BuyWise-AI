@@ -17,6 +17,7 @@ export function evaluatePurchase({ mandate, proposal, product, spentCents = 0, r
   if (typeof product.id !== 'string' || !product.id || proposal.productId !== product.id) reject('PRODUCT_MISMATCH');
   if (product.purchasable !== true) reject('PRODUCT_NOT_PURCHASABLE');
   if (!positive(proposal.quantity) || !positive(mandate.maxQuantity) || proposal.quantity > mandate.maxQuantity) reject('QUANTITY_NOT_ALLOWED');
+  if (proposal.quantity > (mandate.categoryLimits?.[product.category] ?? Infinity)) reject('CATEGORY_QUANTITY_EXCEEDED');
   if (!nonnegative(product.stock) || proposal.quantity > product.stock) reject('INSUFFICIENT_STOCK');
   // Unit price, flat shipping, and final tax come only from the server's quote.
   const amounts = [product.unitPriceCents, product.shippingCents, product.taxCents,

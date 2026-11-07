@@ -137,3 +137,11 @@ body { background: var(--paper); color: var(--ink); }
 .comparison-panel { min-width: 0; margin-block: 1rem; }
 .comparison-panel .ag-root-wrapper { margin-block: 1rem; }
 .comparison-panel .ag-cell-wrap-text { line-height: 1.45; padding-block: .45rem; }
+
+.basket-pick { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-block: .4rem; }
+.basket-pick input { width: 5rem; }
+.basket-permissions { display: grid; gap: .3rem; border: 1px solid var(--border); border-radius: .5rem; padding: .5rem; }
+.basket-permissions input[type=checkbox] { width: auto; }
+.basket-offers { min-width: 0; margin-block: 1.25rem; }
+.basket-offers h4 { margin-bottom: .25rem; }
+.comparison-selection { color: var(--accent); }

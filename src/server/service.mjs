@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { catalog, discover, attackListing, inspectListing } from '../core/catalog.mjs';
 import { evaluatePurchase } from '../core/policy.mjs';
 import { categoryIds } from '../core/categories.mjs';
-import { compareOffers } from './comparison.mjs';
+import { compareOffers, preserveCountedItems } from './comparison.mjs';
+import { evaluateBasket } from '../core/basket.mjs';
 import { AppError, recommend, paypalProvider } from './providers.mjs';
 import { sealDecision, verifyDecision } from './decision-evidence.mjs';
 
@@ -13,9 +14,19 @@ const mandateInput = z.object({
   maxPurchaseCents: z.number().int().positive().optional(),
   durationHours: z.number().int().min(1).max(168).default(24),
   maxQuantity: z.number().int().min(1).max(50),
-  category: z.enum(categoryIds),
+  category: z.enum(categoryIds).optional(),
+  categories: z.array(z.enum(categoryIds)).min(1).max(categoryIds.length).optional(),
+  categoryLimits: z.record(z.string(), z.number().int().min(1).max(50)).default({}),
   merchantIds: z.array(z.literal('buywise-sandbox')).max(1).default(['buywise-sandbox']),
-}).strict().refine(m => (m.maxPurchaseCents ?? m.budgetCents) <= m.budgetCents);
+}).strict().refine(m => {
+  const categories = m.categories ?? (m.category ? [m.category] : []);
+  return categories.length && !(m.category && m.categories) && new Set(categories).size === categories.length &&
+    Object.keys(m.categoryLimits).every(id => categories.includes(id) && m.categoryLimits[id] <= m.maxQuantity) &&
+    (m.maxPurchaseCents ?? m.budgetCents) <= m.budgetCents;
+});
+const basketInput = z.object({ lines: z.array(z.object({
+  productId: z.string().min(1).max(100), quantity: z.number().int().min(1).max(50),
+}).strict()).min(1).max(6) }).strict();
 const proposalInput = z.object({ productId: z.string().min(1).max(100), quantity: z.number().int().min(1).max(100), explanation: z.string().max(1500).optional() }).strict();
 const reservedStates = ['reserved', 'creating', 'order_created', 'capture_pending', 'review_required'];
 export function createService(store, paypal = paypalProvider(), ai = recommend, clock = Date.now) {
@@ -86,15 +97,128 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
     return result;
   }
   function checkIntent(owner, intent, stage) {
-    const { decision, sealed } = evaluate(owner, { productId: intent.productId, quantity: intent.quantity }, intent.quote, stage, intent);
+    const { decision, sealed } = intent.lines
+      ? basketCheck(owner, intent.lines, stage, intent.basketRequest, intent)
+      : evaluate(owner, { productId: intent.productId, quantity: intent.quantity }, intent.quote, stage, intent);
     event(owner, decision.allowed ? 'policy' : 'blocked', stage + ' policy check', decision.allowed ? 'Allowed' : decision.reasons.join(', '), intent.id, sealed);
     if (!decision.allowed) return new AppError('Purchase blocked: ' + decision.reasons.join(', ').toLowerCase(), 409);
   }
-  function matchOrder(intent, order) {
+  function basketCheck(owner, entries, stage, request, intent) {
+    const rules = mandate(owner);
+    const funds = balances(owner, intent?.id);
+    const now = clock();
+    const decision = evaluateBasket({ entries, mandate: rules, ...funds, now, ...request });
+    if (intent && rules.version !== intent.mandateVersion) decision.reasons.push('MANDATE_CHANGED');
+    if (intent && now >= intent.expiresAt) decision.reasons.push('QUOTE_EXPIRED');
+    if (intent && intent.totalCents !== decision.totalCents) decision.reasons.push('QUOTE_MISMATCH');
+    decision.allowed = !decision.reasons.length;
+    const sealed = sealDecision({ mandate: rules, stage, evaluatedAt: now, lines: entries, balances: funds, decision, request });
+    return { decision, sealed };
+  }
+  function reserveBasket(owner, input, run) {
+    const parsed = basketInput.parse(input);
+    return policyTransaction(() => {
+      releaseExpired(owner);
+      if (run) {
+        const currentRun = owned('research', run.id, owner);
+        if (currentRun.intentId) return owned('intent', currentRun.intentId, owner);
+        if (!run.decision.allowed || run.mandateVersion !== mandate(owner).version) throw new AppError('Search again under the current mandate.', 409);
+      }
+      const entries = parsed.lines.map(line => {
+        const product = catalog.find(p => p.id === line.productId);
+        if (!product) throw new AppError('Unknown basket item.', 400);
+        return { product, quantity: line.quantity };
+      });
+      const request = run?.basketRequest ?? {};
+      const { decision, sealed } = basketCheck(owner, entries, 'Basket review', request);
+      if (!decision.allowed) {
+        event(owner, 'blocked', 'Basket blocked', decision.reasons.join(', '), null, sealed);
+        return new AppError(`Basket blocked: ${decision.reasons.join(', ')}`, 409);
+      }
+      if (store.list('intent', owner).some(i => reservedStates.includes(i.status))) throw new AppError('Resolve the open purchase first.', 409);
+      const createdAt = clock();
+      const intent = { id: randomUUID(), owner, lines: entries, basketRequest: request, quantity: decision.quantity,
+        productName: entries.map(e => `${e.quantity} × ${e.product.name}`).join(' + '),
+        totalCents: decision.totalCents, mandateVersion: mandate(owner).version, createdAt,
+        expiresAt: createdAt + 15 * 60000, status: 'reserved', orderId: null, captureId: null, webhookVerified: false, lockUntil: 0 };
+      store.put('intent', intent);
+      if (run) store.put('research', { ...run, intentId: intent.id });
+      event(owner, 'policy', 'Basket cleared by AgentGuard', 'Combined amount reserved for buyer approval.', intent.id, sealed);
+      return intent;
+    });
+  }
+  function mixedResearch(owner, rules, products, answer) {
+    const request = { budgetCents: answer.basketBudgetCents, currency: answer.basketCurrency,
+      requests: answer.lines.map(line => line.parsedRequest) };
+    const groups = answer.lines.map(line => {
+      const parsed = line.parsedRequest;
+      const options = products.filter(product => product.category === parsed.category);
+      const comparison = compareOffers(options, line, (proposal, product) =>
+        evaluate(owner, proposal, product, 'Basket comparison', null, parsed));
+      return { id: randomUUID(), request: parsed, rows: comparison.rows };
+    });
+    let best;
+    const funds = balances(owner);
+    const now = clock();
+    // At most six lines and three offers per category in this store.
+    function visit(index, entries, rank) {
+      if (index < groups.length) {
+        groups[index].rows.forEach((row, preference) => {
+          if (!row.featureFit || row.requestReasons.length) return;
+          const product = products.find(p => p.id === row.productId);
+          visit(index + 1, [...entries, { product, quantity: row.quantity }], rank + preference);
+        });
+        return;
+      }
+      const decision = evaluateBasket({ entries, mandate: rules, ...funds, now, ...request });
+      // Suggest a permitted combination first. Among permitted combinations
+      // prefer Gemini's rankings, with total cost as the tie breaker.
+      const score = [decision.allowed ? 0 : 1, decision.allowed ? rank : decision.reasons.length,
+        decision.totalCents, rank];
+      const firstDifference = best && score.findIndex((value, i) => value !== best.score[i]);
+      if (!best || (firstDifference >= 0 && score[firstDifference] < best.score[firstDifference])) {
+        best = { score, entries, decision };
+      }
+    }
+    visit(0, [], 0);
+    const result = { kind: 'basket', groups, basketRequest: request, source: 'gemini', recommendationId: null };
+    if (!best) {
+      const missing = groups.filter(g => !g.rows.some(r => r.featureFit && !r.requestReasons.length));
+      const message = 'No suitable option for: ' + missing.map(g => g.request.productQuery).join(', ') + '. The entire basket is on hold.';
+      event(owner, 'agent', 'No complete basket', message);
+      return { ...result, outcome: 'no_match', message, entries: [] };
+    }
+    const { entries } = best;
+    const { decision, sealed } = basketCheck(owner, entries, 'Basket recommendation', request);
+    const lines = entries.map(e => ({ productId: e.product.id, quantity: e.quantity }));
+    const outcome = decision.allowed ? 'match' : 'blocked';
+    event(owner, decision.allowed ? 'agent' : 'blocked', 'Basket recommendation checked',
+      decision.allowed ? 'All requested lines fit.' : decision.reasons.join(', '), null, sealed);
+    if (decision.allowed) {
+      const run = store.put('research', { id: randomUUID(), owner, lines, decision, mandateVersion: rules.version,
+        basketRequest: request, createdAt: now });
+      result.recommendationId = run.id;
+    }
+    const ceilings = [rules.maxPurchaseCents, rules.budgetCents - funds.spentCents - funds.reservedCents];
+    if (request.budgetCents != null) ceilings.push(request.budgetCents);
+    const excess = decision.totalCents - Math.min(...ceilings);
+    const message = !decision.allowed && excess > 0
+      ? `This complete basket exceeds the spending limit by $${(excess / 100).toFixed(2)}. Nothing has been reserved.`
+      : undefined;
+    return { ...result, entries, decision, outcome, message, spendingLimitCents: Math.min(...ceilings) };
+  }
+  function matchOrder(intent, order, requireItems = false) {
     const units = order.purchase_units;
     if (order.id !== intent.orderId || order.intent !== 'CAPTURE' || units?.length !== 1) throw new AppError('PayPal order does not match this purchase.', 409);
     const unit = units[0];
+    if (intent.lines && requireItems && !Array.isArray(unit.items)) throw new AppError('PayPal basket details are missing. Capture is blocked.', 409);
     if (unit.custom_id !== intent.id || unit.payee?.merchant_id !== paypal.merchantId() || unit.amount?.currency_code !== 'USD' || unit.amount?.value !== (intent.totalCents / 100).toFixed(2)) throw new AppError('PayPal order amount, merchant or reference mismatch.', 409);
+    if (intent.lines && unit.items) {
+      const signature = (sku, qty, currency, price) => JSON.stringify([sku, String(qty), currency, price]);
+      const expected = intent.lines.map(({ product, quantity }) => signature(product.id, quantity, product.currency, (product.unitPriceCents / 100).toFixed(2))).sort();
+      const received = unit.items.map(item => signature(item.sku, item.quantity, item.unit_amount?.currency_code, item.unit_amount?.value)).sort();
+      if (JSON.stringify(expected) !== JSON.stringify(received)) throw new AppError('PayPal basket items do not match the approved purchase.', 409);
+    }
     return unit;
   }
   function applyOrder(owner, id, order, verifiedEvent) {
@@ -109,7 +233,7 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
       const wasCaptured = intent.status === 'captured';
       if (capture?.status === 'COMPLETED') {
         intent.status = 'captured'; intent.captureId = capture.id;
-        if (!wasCaptured) event(owner, 'payment', 'Sandbox payment captured', `${intent.quantity} × ${intent.productName}. PayPal capture ${capture.id}.`, intent.id);
+        if (!wasCaptured) event(owner, 'payment', 'Sandbox payment captured', `${intent.lines ? intent.productName : `${intent.quantity} × ${intent.productName}`}. PayPal capture ${capture.id}.`, intent.id);
       } else if (!wasCaptured && capture?.status === 'PENDING') intent.status = 'capture_pending';
       else if (!wasCaptured && ['DECLINED', 'FAILED', 'DENIED'].includes(capture?.status)) intent.status = 'failed';
       // Never downgrade a completed payment based on a late event.
@@ -139,7 +263,7 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
         const previous = store.get('mandate', owner);
         if (previous && !store.get('mandate-version', owner + '/' + previous.version))
           store.put('mandate-version', { ...previous, id: owner + '/' + previous.version, timestamp: null, change: 'Retained earlier version' });
-        return persistMandate({ id: owner, owner, name: data.name, active: true, version: (previous?.version || 0) + 1, durationHours: data.durationHours, expiresAt: clock() + data.durationHours * 3600000, requireApproval: true, currency: 'USD', merchantIds: data.merchantIds, categories: [data.category], maxQuantity: data.maxQuantity, budgetCents: data.budgetCents, maxPurchaseCents: data.maxPurchaseCents ?? data.budgetCents }, 'MANDATE confirmed');
+        return persistMandate({ id: owner, owner, name: data.name, active: true, version: (previous?.version || 0) + 1, durationHours: data.durationHours, expiresAt: clock() + data.durationHours * 3600000, requireApproval: true, currency: 'USD', merchantIds: data.merchantIds, categories: data.categories ?? [data.category], categoryLimits: data.categoryLimits, maxQuantity: data.maxQuantity, budgetCents: data.budgetCents, maxPurchaseCents: data.maxPurchaseCents ?? data.budgetCents }, 'MANDATE confirmed');
       });
     },
     revoke(owner) {
@@ -158,11 +282,20 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
     async research(owner, query) {
       if (typeof query !== 'string' || query.trim().length < 3 || query.length > 1000) throw new AppError('Use a shopping request between 3 and 1,000 characters.');
       const m = mandate(owner);
-      const products = discover(query, m.categories[0]).filter(p => !inspectListing(p.description).length);
-      const answer = await ai({ query, mandate: m, products });
+      const products = m.categories.flatMap(category => discover(query, category)).filter(p => !inspectListing(p.description).length);
+      const rawAnswer = await ai({ query, mandate: m, products });
       if (mandate(owner).version !== m.version) throw new AppError('Your mandate changed during research. Search again.', 409);
+      if (rawAnswer.lines) preserveCountedItems(query, rawAnswer.lines);
+      if (rawAnswer.lines?.length > 1) return mixedResearch(owner, m, products, rawAnswer);
+      const answer = rawAnswer.lines?.[0] ?? rawAnswer;
+      if (rawAnswer.lines) {
+        const parsed = answer.parsedRequest;
+        const limits = [parsed.budgetCents, rawAnswer.basketBudgetCents].filter(n => n != null);
+        parsed.budgetCents = limits.length ? Math.min(...limits) : null;
+        parsed.currency ??= rawAnswer.basketCurrency;
+      }
       const { parsedRequest } = answer;
-      const comparison = compareOffers(products, answer, (proposal, product) =>
+      const comparison = compareOffers(rawAnswer.lines ? products.filter(p => p.category === parsedRequest.category) : products, answer, (proposal, product) =>
         evaluate(owner, proposal, product, 'Recommendation', null, parsedRequest));
       if (!comparison.selected) {
         event(owner, 'agent', 'No suitable match', comparison.message);
@@ -184,6 +317,8 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
       const recommendation = input?.recommendationId
         ? owned('research', z.object({ recommendationId: z.string().uuid() }).strict().parse(input).recommendationId, owner)
         : null;
+      if (recommendation?.lines) return reserveBasket(owner, { lines: recommendation.lines }, recommendation);
+      if (input?.lines) return reserveBasket(owner, input);
       const proposal = proposalInput.parse(recommendation?.proposal ?? input);
       return policyTransaction(() => {
         releaseExpired(owner);
@@ -254,7 +389,7 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
       if (intent.status === 'captured') return intent;
       if (!intent.orderId) throw new AppError('Create the PayPal order first.');
       const order = await paypal.get(intent.orderId);
-      matchOrder(intent, order);
+      matchOrder(intent, order, true);
       if (order.status === 'COMPLETED') return applyOrder(owner, id, order);
       if (order.status !== 'APPROVED') throw new AppError('Approve the payment in PayPal first.', 409);
       intent = policyTransaction(() => {

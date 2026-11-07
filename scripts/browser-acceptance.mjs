@@ -75,6 +75,28 @@ try {
   assert.match(await page.locator('.checkout-summary').innerText(), /\$195\.00/);
   await page.getByRole('button', { name: 'Cancel purchase' }).click();
   console.log('Browser passed: filtered CSV export, mandate, attack, purchase review, cancellation, audit search, cross-tab revocation and reactivation.');
+  await page.getByRole('heading', { name: 'Review your purchase' }).waitFor({ state: 'hidden' });
+  await page.locator('#category').selectOption('keyboards');
+  await page.getByRole('checkbox', { name: 'Mice', exact: true }).check();
+  await page.locator('#quantity').fill('8');
+  await page.locator('#cap').fill('250');
+  await page.getByRole('button', { name: 'Update mandate' }).click();
+  await page.getByRole('heading', { name: 'Build a basket' }).waitFor();
+  await page.getByLabel('Units of Hush 75 Wireless').fill('5');
+  await page.getByLabel('Units of Desk USB Mouse').fill('3');
+  await page.getByRole('button', { name: 'Review whole basket' }).click();
+  await page.getByRole('alert').filter({ hasText: 'PURCHASE_LIMIT_EXCEEDED' }).waitFor();
+  await page.locator('#cap').fill('300');
+  await page.getByRole('button', { name: 'Update mandate' }).click();
+  await page.getByRole('status').filter({ hasText: 'Mandate confirmed' }).waitFor();
+  await page.getByLabel('Units of Hush 75 Wireless').fill('5');
+  await page.getByLabel('Units of Desk USB Mouse').fill('3');
+  await page.getByRole('button', { name: 'Review whole basket' }).click();
+  await page.getByRole('heading', { name: 'Review your purchase' }).waitFor();
+  assert.match(await page.locator('.checkout-summary').innerText(), /\$287\.00/);
+  assert.match(await page.locator('.checkout-summary').innerText(), /3 × Desk USB Mouse/);
+  await page.getByRole('button', { name: 'Cancel purchase' }).click();
+  console.log('Browser passed: mixed category mandate, aggregate rejection, itemized review and cancellation.');
 } finally {
   await browser.close();
 }
