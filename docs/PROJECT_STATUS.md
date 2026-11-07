@@ -1,3 +1,11 @@
+# Project status on 8 November 2026
+
+The comparison grid and no-match flow passed live Gemini browser checks at request budgets of $100 and $60. Two Shutter HD webcams cost $78. At $60 the UI showed an $18 shortfall and no purchase action. Release checks passed 61 unit/service tests and 13 HTTP checks.
+
+Read-only PayPal sandbox lookups confirmed that a locally webhook-verified $245 purchase has a completed order, matching completed capture, correct merchant and matching PAYMENT.CAPTURE.COMPLETED event. Public repository, video and submission remain open.
+
+## Earlier milestones
+
 # Project status on 6 November 2026
 
 Local MVP verified through live Gemini research, deterministic evaluation, reservation and PayPal sandbox order retrieval. The current milestone is buyer approval, capture and verified HTTPS webhook delivery. Release gate open. See the [feature-by-feature evidence](HANDBOOK_AUDIT.md) for validation results, stack differences and deliverables.

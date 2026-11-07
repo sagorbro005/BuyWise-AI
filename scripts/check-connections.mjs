@@ -11,7 +11,7 @@ svc.saveMandate(ownerPaypal, { budgetCents: 30000, maxQuantity: 5, category: 'ke
 const checks = await Promise.allSettled([
   (async () => {
     const result = await svc.research(ownerAi, 'Find five quiet wireless keyboards for a shared office under 300 USD.');
-    console.log('Gemini: real recommendation received; product:', result.proposal.productId, 'quantity:', result.proposal.quantity, 'policy allowed:', result.decision.allowed);
+    console.log('Gemini comparison:', result.outcome, result.proposal?.productId ?? result.message, 'offers:', result.rows.length);
   })(),
   (async () => {
     const quote = svc.reserve(ownerPaypal, { productId: 'hush-75', quantity: 5 });

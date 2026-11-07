@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { catalog, discover, attackListing, inspectListing } from '../core/catalog.mjs';
 import { evaluatePurchase } from '../core/policy.mjs';
 import { categoryIds } from '../core/categories.mjs';
+import { compareOffers } from './comparison.mjs';
 import { AppError, recommend, paypalProvider } from './providers.mjs';
 import { sealDecision, verifyDecision } from './decision-evidence.mjs';
 
@@ -158,13 +159,19 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
       if (typeof query !== 'string' || query.trim().length < 3 || query.length > 1000) throw new AppError('Use a shopping request between 3 and 1,000 characters.');
       const m = mandate(owner);
       const products = discover(query, m.categories[0]).filter(p => !inspectListing(p.description).length);
-      const { parsedRequest, ...selection } = await ai({ query, mandate: m, products });
-      const proposal = proposalInput.parse(selection);
-      const product = catalog.find(p => p.id === proposal.productId);
-      const { decision, sealed } = evaluate(owner, proposal, product, 'Recommendation', null, parsedRequest);
+      const answer = await ai({ query, mandate: m, products });
+      if (mandate(owner).version !== m.version) throw new AppError('Your mandate changed during research. Search again.', 409);
+      const { parsedRequest } = answer;
+      const comparison = compareOffers(products, answer, (proposal, product) =>
+        evaluate(owner, proposal, product, 'Recommendation', null, parsedRequest));
+      if (!comparison.selected) {
+        event(owner, 'agent', 'No suitable match', comparison.message);
+        return { outcome: 'no_match', message: comparison.message, parsedRequest, rows: comparison.rows, proposal: null, recommendationId: null, source: 'gemini' };
+      }
+      const { proposal, decision, sealed } = comparison.selected;
       event(owner, decision.allowed ? 'agent' : 'blocked', decision.allowed ? 'AI recommendation checked' : 'AI proposal blocked', decision.allowed ? proposal.explanation : decision.reasons.join(', '), null, sealed);
       const run = store.put('research', { id: randomUUID(), owner, proposal, parsedRequest: parsedRequest ?? null, decision, mandateVersion: m.version, model: process.env.GEMINI_MODEL || null, createdAt: clock() });
-      return { recommendationId: run.id, parsedRequest, proposal, decision, products, source: 'gemini' };
+      return { outcome: decision.allowed ? 'match' : 'blocked', recommendationId: run.id, parsedRequest, proposal, decision, rows: comparison.rows, products, source: 'gemini' };
     },
     attack(owner) {
       const proposal = { productId: attackListing.id, quantity: 50 };

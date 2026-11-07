@@ -5,6 +5,14 @@ import { createService } from '../src/server/service.mjs';
 import { inspectListing, attackListing, catalog } from '../src/core/catalog.mjs';
 import { categoryIds } from '../src/core/categories.mjs';
 
+function ranking(products, preferredId, quantity = 5, request = {}) {
+  return {
+    parsedRequest: { productQuery: 'Office supplies', category: products[0].category, quantity, currency: 'USD', budgetCents: null, requirements: [], ...request },
+    rankedOffers: [...products].sort((a, b) => Number(b.id === preferredId) - Number(a.id === preferredId))
+      .map(p => ({ productId: p.id, evidence: [] })),
+  };
+}
+
 function setup(t) {
   const store = createStore(':memory:'); t.after(() => store.close());
   let now = 1000, creates = 0, captures = 0, verified = true, mismatch = false, timeout = false;
@@ -31,7 +39,7 @@ function setup(t) {
     },
     async verify() { if (!verified) throw new Error('Invalid signature'); },
   };
-  const ai = async () => ({ productId: 'hush-75', quantity: 5, explanation: 'Quiet switches suit a shared workspace and the total is within budget.' });
+  const ai = async ({ products }) => ranking(products, 'hush-75');
   const service = createService(store, provider, ai, () => now);
   service.saveMandate('alice', { budgetCents: 30000, maxQuantity: 5, category: 'keyboards' });
   return { store, service, provider, orders,
@@ -53,7 +61,7 @@ test('each mandate category offers distinct, priced alternatives and enforces th
     const chosen = options[1];
     const service = createService(s.store, s.provider, async ({ products }) => {
       assert.deepEqual(new Set(products.map(p => p.id)), new Set(options.map(p => p.id)));
-      return { productId: chosen.id, quantity: 1, explanation: chosen.description };
+      return ranking(products, chosen.id, 1);
     }, () => 1000);
     const fields = { category, budgetCents: 30000, maxQuantity: 5 };
     service.saveMandate('alice', { ...fields, merchantIds: [] });
@@ -116,15 +124,56 @@ test('approved order webhook records approval once without spending any budget',
 
 test('a proposal that fits the mandate still fails the shopper’s narrower request', async t => {
   const s = setup(t);
-  const ai = async () => ({
-    parsedRequest: { quantity: 5, budgetCents: 18000, currency: 'USD', category: 'keyboards' },
-    productId: 'hush-75', quantity: 5, explanation: 'Example',
-  });
+  const ai = async ({ products }) => ranking(products, 'hush-75', 5, { budgetCents: 10000 });
   const service = createService(s.store, s.provider, ai, () => 1000);
-  const result = await service.research('alice', 'Five keyboards under $180');
-  assert.ok(result.decision.reasons.includes('REQUEST_BUDGET_EXCEEDED'));
-  assert.throws(() => service.reserve('alice', { recommendationId: result.recommendationId }), /research again/);
+  const result = await service.research('alice', 'Five keyboards under $100');
+  assert.equal(result.outcome, 'no_match');
+  assert.equal(result.recommendationId, null);
+  assert.equal(result.proposal, null);
+  assert.ok(result.rows.every(row => row.requestReasons.includes('REQUEST_BUDGET_EXCEEDED')));
   assert.equal(service.snapshot('alice').reservedCents, 0);
+});
+
+test('webcam comparison checks listing quotes, totals and mandate independently', async t => {
+  const s = setup(t);
+  s.service.saveMandate('alice', { category: 'webcams', budgetCents: 10000, maxQuantity: 2 });
+  let budgetCents = 10000;
+  const ai = async ({ products }) => {
+    const result = ranking(products, 'clip-720', 2, { requirements: ['1080p', 'physical privacy shutter'], budgetCents });
+    for (const offer of result.rankedOffers) {
+      // Clip has neither feature. Room Wide has no shutter in its listing.
+      offer.evidence = ['1080p', 'physical privacy shutter'];
+    }
+    return result;
+  };
+  const svc = createService(s.store, s.provider, ai, () => 1000);
+  const found = await svc.research('alice', 'Two 1080p webcams with a shutter');
+  assert.equal(found.proposal.productId, 'shutter-hd');
+  assert.equal(found.rows.find(r => r.productId === 'clip-720').featureFit, false);
+  assert.deepEqual(found.rows.find(r => r.productId === 'clip-720').policyReasons, []);
+  assert.ok(found.rows.find(r => r.productId === 'room-wide').policyReasons.includes('BUDGET_EXCEEDED'));
+  assert.equal(svc.reserve('alice', { recommendationId: found.recommendationId }).totalCents, 7800);
+  svc.cancel('alice', svc.snapshot('alice').intents[0].id);
+  budgetCents = 6000;
+  const none = await svc.research('alice', 'Two webcams under $60');
+  assert.equal(none.outcome, 'no_match');
+  assert.match(none.message, /\$78\.00.*\$18\.00 above/);
+  assert.equal(none.recommendationId, null);
+  assert.equal(svc.snapshot('alice').reservedCents, 0);
+  assert.deepEqual(s.counts(), { creates: 0, captures: 0 });
+});
+
+test('unsupported request category produces no recommendation; incomplete model rankings fail closed', async t => {
+  const s = setup(t);
+  const svc = createService(s.store, s.provider, async ({ products }) =>
+    ranking(products, 'hush-75', 1, { category: 'other' }), () => 1000);
+  assert.equal((await svc.research('alice', 'A laptop')).outcome, 'no_match');
+  const invalid = createService(s.store, s.provider, async ({ products }) => {
+    const answer = ranking(products, 'hush-75');
+    answer.rankedOffers.pop();
+    return answer;
+  }, () => 1000);
+  await assert.rejects(invalid.research('alice', 'Compare keyboards'), /every listing/);
 });
 
 test('rejected and accepted decisions retain their original rules and expose snapshot changes', t => {
@@ -250,7 +299,7 @@ test('mismatched webhook capture is rejected', async t => {
 test('AI recommendation is independently checked', async t => {
   const s = setup(t); const result = await s.service.research('alice', 'Five quiet keyboards');
   assert.equal(result.source, 'gemini'); assert.equal(result.decision.allowed, true);
-  const unsafe = createService(s.store, s.provider, async () => ({ productId: 'hush-75', quantity: 50, explanation: 'Unsafe model output' }), () => 1000);
+  const unsafe = createService(s.store, s.provider, async ({ products }) => ranking(products, 'hush-75', 50), () => 1000);
   assert.equal((await unsafe.research('alice', 'Five quiet keyboards')).decision.allowed, false);
   assert.equal(s.counts().creates, 0);
 });

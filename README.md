@@ -6,12 +6,14 @@ BuyWise is a sandbox purchasing workspace for small teams. An AI assistant recom
 
 The memorable demo: a malicious product listing asks for 50 keyboards from an unauthorized seller. AgentGuard rejects the labeled attack fixture before any PayPal request. The user then chooses a compliant alternative, approves in PayPal, and inspects the receipt and verified webhook.
 
-## Current status — 6 November 2026
+## Current status — 8 November 2026
 
 - Implemented: responsive workspace, mandate editor, fictional product catalog, Gemini adapter, deterministic policy checks, labeled attack lab, SQLite persistence, session isolation, PayPal Orders adapter, JavaScript SDK v6 integration, webhook postback verification, AG Grid Community ledger, audit timeline and setup screen.
 - Verified locally: production build, automated policy/service tests, browser-based mandate creation, over-budget rejection, reservation, cancellation and attack demonstration.
-- **Verified against providers on 5 November 2026:** Gemini recommended five Hush keyboards through the running app; the proposal passed the $300 mandate at $245. A separate PayPal sandbox test created and retrieved a matching $245 order. Buyer approval, capture and authentic webhook delivery remain unverified.
+- **Verified against providers on 5 November 2026:** Gemini recommended five Hush keyboards through the running app; the proposal passed the $300 mandate at $245. A separate PayPal sandbox test created and retrieved a matching $245 order. On 8 November, read-only PayPal sandbox lookups confirmed a completed $245 capture and its matching capture event against the locally webhook-verified purchase.
 - No hosted deployment or public GitHub repository has been created yet. This source is prepared for publication under MIT.
+
+The purchasing assistant now compares every candidate in the approved category in AG Grid. Each row shows its quantity-adjusted price, listing evidence for requested features, request budget and current mandate check. A search with no fitting product explains the constraint without offering a purchase.
 
 ## Run locally
 
