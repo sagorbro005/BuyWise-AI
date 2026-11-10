@@ -4,6 +4,7 @@ import { createStore } from '../src/server/store.mjs';
 import { createService } from '../src/server/service.mjs';
 import { inspectListing, attackListing, catalog } from '../src/core/catalog.mjs';
 import { categoryIds } from '../src/core/categories.mjs';
+import { buildProcurementReceipt } from '../src/core/receipt.mjs';
 
 function ranking(products, preferredId, quantity = 5, request = {}) {
   return {
@@ -433,6 +434,14 @@ test('mixed basket reserves once and completes one order, capture and verified e
   assert.equal(state.spentCents, 28700);
   assert.equal(state.reservedCents, 0);
   assert.equal(state.intents[0].webhookVerified, true);
+  const receipt = buildProcurementReceipt(state.intents[0], state.events);
+  assert.equal(receipt.paypal.orderId, order.orderId);
+  assert.equal(receipt.paypal.captureId, state.intents[0].captureId);
+  assert.equal(receipt.webhook.eventId, event.id);
+  assert.ok(receipt.webhook.verifiedAt);
+  assert.equal(receipt.mandate.version, state.intents[0].mandateVersion);
+  assert.ok(receipt.decisionEvidence.sha256);
+  assert.equal(receipt.items.length, 2);
   assert.deepEqual(s.counts(), { creates: 1, captures: 1 });
 });
 

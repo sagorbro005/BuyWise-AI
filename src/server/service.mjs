@@ -138,10 +138,13 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
       }
       if (store.list('intent', owner).some(i => reservedStates.includes(i.status))) throw new AppError('Resolve the open purchase first.', 409);
       const createdAt = clock();
+      const rules = mandate(owner);
       const intent = { id: randomUUID(), owner, lines: entries, basketRequest: request, quantity: decision.quantity,
         productName: entries.map(e => `${e.quantity} × ${e.product.name}`).join(' + '),
-        totalCents: decision.totalCents, mandateVersion: mandate(owner).version, createdAt,
-        expiresAt: createdAt + 15 * 60000, status: 'reserved', orderId: null, captureId: null, webhookVerified: false, lockUntil: 0 };
+        totalCents: decision.totalCents, mandateVersion: rules.version, mandateName: rules.name || 'Office purchasing',
+        mandateSha256: sealed.evidence.mandateSha256, decisionEvidenceSha256: sealed.evidenceSha256, createdAt,
+        expiresAt: createdAt + 15 * 60000, status: 'reserved', orderId: null, captureId: null, capturedAt: null,
+        webhookVerified: false, webhookEventId: null, webhookEventType: null, webhookVerifiedAt: null, lockUntil: 0 };
       store.put('intent', intent);
       if (run) store.put('research', { ...run, intentId: intent.id });
       event(owner, 'policy', 'Basket cleared by AgentGuard', 'Combined amount reserved for buyer approval.', intent.id, sealed);
@@ -233,14 +236,19 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
       if (capture && (capture.amount?.currency_code !== 'USD' || capture.amount?.value !== (intent.totalCents / 100).toFixed(2))) throw new AppError('Capture amount mismatch.', 409);
       const wasCaptured = intent.status === 'captured';
       if (capture?.status === 'COMPLETED') {
-        intent.status = 'captured'; intent.captureId = capture.id;
+        intent.status = 'captured'; intent.captureId = capture.id; intent.capturedAt ??= clock();
         if (!wasCaptured) event(owner, 'payment', 'Sandbox payment captured', `${intent.lines ? intent.productName : `${intent.quantity} × ${intent.productName}`}. PayPal capture ${capture.id}.`, intent.id);
       } else if (!wasCaptured && capture?.status === 'PENDING') intent.status = 'capture_pending';
       else if (!wasCaptured && ['DECLINED', 'FAILED', 'DENIED'].includes(capture?.status)) intent.status = 'failed';
       // Never downgrade a completed payment based on a late event.
       if (verifiedEvent) {
         if (verifiedEvent.resource?.id !== capture?.id || verifiedEvent.resource?.amount?.currency_code !== 'USD' || verifiedEvent.resource?.amount?.value !== (intent.totalCents / 100).toFixed(2)) throw new AppError('Webhook capture does not match the purchase.', 409);
-        if (verifiedEvent.event_type === 'PAYMENT.CAPTURE.COMPLETED' && capture?.status === 'COMPLETED') intent.webhookVerified = true;
+        if (verifiedEvent.event_type === 'PAYMENT.CAPTURE.COMPLETED' && capture?.status === 'COMPLETED') {
+          intent.webhookVerified = true;
+          intent.webhookEventId = verifiedEvent.id;
+          intent.webhookEventType = verifiedEvent.event_type;
+          intent.webhookVerifiedAt = clock();
+        }
         event(owner, 'verified', 'PayPal webhook verified', verifiedEvent.event_type + ' · ' + verifiedEvent.id, intent.id);
         store.put('webhook', { id: verifiedEvent.id, owner, eventType: verifiedEvent.event_type, receivedAt: clock() });
       }
@@ -352,7 +360,9 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
         }
         const existing = store.list('intent', owner).find(i => reservedStates.includes(i.status));
         if (existing) throw new AppError('Complete or cancel your open purchase before starting another.', 409);
-        const intent = { id: randomUUID(), owner, productId: product.id, productName: product.name, quantity: proposal.quantity, quote: product, totalCents: decision.totalCents, mandateVersion: mandate(owner).version, createdAt: clock(), expiresAt: clock() + 15 * 60000, status: 'reserved', orderId: null, captureId: null, webhookVerified: false, lockUntil: 0 };
+        const rules = mandate(owner);
+        const now = clock();
+        const intent = { id: randomUUID(), owner, productId: product.id, productName: product.name, quantity: proposal.quantity, quote: product, totalCents: decision.totalCents, mandateVersion: rules.version, mandateName: rules.name || 'Office purchasing', mandateSha256: sealed.evidence.mandateSha256, decisionEvidenceSha256: sealed.evidenceSha256, createdAt: now, expiresAt: now + 15 * 60000, status: 'reserved', orderId: null, captureId: null, capturedAt: null, webhookVerified: false, webhookEventId: null, webhookEventType: null, webhookVerifiedAt: null, lockUntil: 0 };
         store.put('intent', intent);
         if (recommendation) store.put('research', { ...recommendation, intentId: intent.id });
         event(owner, 'policy', 'Purchase cleared by AgentGuard', 'Budget reserved. Waiting for your PayPal approval.', intent.id, sealed);
