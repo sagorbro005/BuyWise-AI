@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { catalog, discover, attackListing, inspectListing } from '../core/catalog.mjs';
+import { catalog, discover, attackListing, buildCustomAttack, inspectListing } from '../core/catalog.mjs';
 import { evaluatePurchase } from '../core/policy.mjs';
 import { categoryIds } from '../core/categories.mjs';
 import { compareOffers, preserveCountedItems } from './comparison.mjs';
@@ -28,6 +28,7 @@ const basketInput = z.object({ lines: z.array(z.object({
   productId: z.string().min(1).max(100), quantity: z.number().int().min(1).max(50),
 }).strict()).min(1).max(6) }).strict();
 const proposalInput = z.object({ productId: z.string().min(1).max(100), quantity: z.number().int().min(1).max(100), explanation: z.string().max(1500).optional() }).strict();
+const attackInput = z.object({ description: z.string().trim().min(3).max(1000).optional() }).strict();
 const reservedStates = ['reserved', 'creating', 'order_created', 'capture_pending', 'review_required'];
 export function createService(store, paypal = paypalProvider(), ai = recommend, clock = Date.now) {
   const event = (owner, kind, title, detail, intentId = null, evidence = {}) => store.put('event', { id: randomUUID(), owner, kind, title, detail, intentId, createdAt: clock(), ...evidence });
@@ -306,12 +307,27 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
       const run = store.put('research', { id: randomUUID(), owner, proposal, parsedRequest: parsedRequest ?? null, decision, mandateVersion: m.version, model: process.env.GEMINI_MODEL || null, createdAt: clock() });
       return { outcome: decision.allowed ? 'match' : 'blocked', recommendationId: run.id, parsedRequest, proposal, decision, rows: comparison.rows, products, source: 'gemini' };
     },
-    attack(owner) {
-      const proposal = { productId: attackListing.id, quantity: 50 };
-      const detection = inspectListing(attackListing.description);
-      const { decision, sealed } = evaluate(owner, proposal, attackListing, 'Attack test');
-      event(owner, 'blocked', 'Attack test blocked', `Labeled test fixture. ${decision.reasons.join(', ')}. No PayPal order requested.`, null, sealed);
-      return { listing: attackListing, proposal, detection, decision, paypalCalled: false, fixture: true };
+    attack(owner, input = {}) {
+      const parsed = attackInput.parse(input ?? {});
+      const m = mandate(owner);
+      const isCustom = Boolean(parsed.description);
+      const { listing, proposal } = isCustom
+        ? buildCustomAttack(parsed.description, m.categories[0])
+        : { listing: attackListing, proposal: { productId: attackListing.id, quantity: 50 } };
+      const detection = inspectListing(listing.description);
+      const evaluated = evaluate(owner, proposal, listing, isCustom ? 'Custom attack test' : 'Attack test');
+      let { decision, sealed } = evaluated;
+      // An unverified custom paste never exists in the trusted server catalog.
+      if (isCustom && decision.allowed) {
+        decision = { ...decision, allowed: false, outcome: 'BLOCKED', reasons: [...decision.reasons, 'PRODUCT_NOT_IN_CATALOG'] };
+        sealed = sealDecision({
+          mandate: m, stage: 'Custom attack test', evaluatedAt: clock(), proposal,
+          product: listing, balances: balances(owner), findings: detection, decision, parsedRequest: null, quote: null,
+        });
+      }
+      event(owner, 'blocked', isCustom ? 'Custom attack test blocked' : 'Attack test blocked',
+        `${isCustom ? 'Custom untrusted listing test.' : 'Labeled test fixture.'} ${decision.reasons.join(', ')}. No PayPal order requested.`, null, sealed);
+      return { listing, proposal, detection, decision, paypalCalled: false, fixture: !isCustom };
     },
     reserve(owner, input) {
       const recommendation = input?.recommendationId

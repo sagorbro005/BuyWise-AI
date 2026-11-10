@@ -71,7 +71,7 @@ async function handle(request: NextRequest, ctx: { params: Promise<{ path: strin
       if (path === 'mandates') result = service.saveMandate(owner, body);
       else if (path === 'mandates/revoke') result = service.revoke(owner);
       else if (path === 'agent/propose') result = await service.research(owner, body.query);
-      else if (path === 'attack') result = service.attack(owner);
+      else if (path === 'attack') result = service.attack(owner, body);
       else if (path === 'intents') result = service.reserve(owner, body);
       else if (['paypal/create', 'paypal/capture', 'paypal/reconcile', 'intents/cancel'].includes(path)) {
         if (typeof body.intentId !== 'string' || body.intentId.length > 100) throw new AppError('A valid purchase ID is required.');

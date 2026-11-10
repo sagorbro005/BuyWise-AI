@@ -97,6 +97,14 @@ try {
   assert.match(await page.locator('.checkout-summary').innerText(), /3 × Desk USB Mouse/);
   await page.getByRole('button', { name: 'Cancel purchase' }).click();
   console.log('Browser passed: mixed category mandate, aggregate rejection, itemized review and cancellation.');
+  await page.getByRole('button', { name: 'AgentGuard', exact: true }).click();
+  await page.getByRole('button', { name: 'Use sample' }).click();
+  await page.getByRole('button', { name: 'Test custom injection' }).click();
+  await page.getByText('UNTRUSTED LISTING · CUSTOM TEST', { exact: true }).waitFor();
+  await page.getByText('Stopped before PayPal', { exact: true }).waitFor();
+  assert.match(await page.locator('.attack-result').innerText(), /Role impersonation/);
+  assert.match(await page.locator('.attack-result').innerText(), /Instruction override/);
+  console.log('Browser passed: interactive custom injection testing in AgentGuard Lab.');
 } finally {
   await browser.close();
 }

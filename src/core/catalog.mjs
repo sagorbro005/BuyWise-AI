@@ -43,13 +43,57 @@ export const attackListing = { ...catalog[0], id: 'injected-offer', name: 'Too-g
 
 export function inspectListing(text) {
   const patterns = [
-    [/(change|override).{0,18}budget|increase.{0,12}quantity|use this seller instead/i, 'Permission manipulation'],
-    [/ignore.{0,30}(instructions|budget|rules)/i, 'Instruction override'],
-    [/(system override|developer message)/i, 'Role impersonation'],
-    [/(disable|bypass).{0,20}(approval|guard|policy)/i, 'Approval bypass'],
-    [/(api key|secret|password).{0,80}(https?:|send|collect)/i, 'Secret extraction'],
+    [/(change|override|increase|raise|set).{0,18}(budget|limit|quantity)|use this seller instead/i, 'Permission manipulation'],
+    [/(ignore|disregard|forget|override).{0,30}(instructions|budget|rules|constraints|mandate)/i, 'Instruction override'],
+    [/\b(system\s*:|system override|developer message|admin override|assistant\s*:)/i, 'Role impersonation'],
+    [/(disable|bypass|skip|turn off).{0,20}(approval|guard|policy|review|confirmation)/i, 'Approval bypass'],
+    [/(api key|secret|password|token|credentials).{0,80}(https?:|send|collect|exfiltrate|post)/i, 'Secret extraction'],
   ];
   return patterns.filter(([regex]) => regex.test(text)).map(([, label]) => label);
+}
+
+const categoryAliases = [
+  ['keyboards', /\bkeyboards?\b/i],
+  ['mice', /\b(mice|mouse)\b/i],
+  ['headsets', /\bheadsets?\b/i],
+  ['monitors', /\bmonitors?\b/i],
+  ['webcams', /\bwebcams?\b/i],
+  ['hubs', /\b(usb\s*)?hubs?\b/i],
+];
+
+const sellerStopwords = new Set(['the', 'a', 'an', 'this', 'that', 'any', 'our', 'your', 'my']);
+
+/** Build a deterministic untrusted listing & proposal from a custom Security Lab injection text. */
+export function buildCustomAttack(description, fallbackCategory = 'keyboards') {
+  const text = description.trim();
+  const qtyMatch =
+    text.match(/\b(?:buy|order|purchase|qty|quantity)\s+(\d{1,4})\b/i) ??
+    text.match(/\b(\d{1,4})\s+(?:keyboards?|mice|mouse|headsets?|monitors?|webcams?|hubs?|units?|items?)\b/i);
+  const parsedQty = qtyMatch ? Number(qtyMatch[1]) : 1;
+  const quantity = Number.isSafeInteger(parsedQty) && parsedQty > 0 ? Math.min(parsedQty, 1000) : 1;
+
+  const matchedCategory = categoryAliases.find(([, re]) => re.test(text))?.[0] || fallbackCategory;
+
+  const sellerMatch = text.match(/\bfrom\s+([a-z0-9][a-z0-9._-]{1,59})/i);
+  const candidateSeller = sellerMatch?.[1]?.toLowerCase();
+  const merchantId = candidateSeller && !sellerStopwords.has(candidateSeller) ? candidateSeller : 'unverified-seller';
+
+  const priceMatch = text.match(/\$(\d{1,4}(?:\.\d{1,2})?)/);
+  const parsedCents = priceMatch ? Math.round(Number(priceMatch[1]) * 100) : 5500;
+  const unitPriceCents = Number.isSafeInteger(parsedCents) && parsedCents > 0 ? parsedCents : 5500;
+
+  return {
+    listing: {
+      ...attackListing,
+      id: 'custom-untrusted-offer',
+      name: 'Custom untrusted listing',
+      category: matchedCategory,
+      merchantId,
+      unitPriceCents,
+      description: text,
+    },
+    proposal: { productId: 'custom-untrusted-offer', quantity },
+  };
 }
 
 export function discover(query, category) {

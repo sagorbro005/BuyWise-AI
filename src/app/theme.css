@@ -145,3 +145,7 @@ body { background: var(--paper); color: var(--ink); }
 .basket-offers { min-width: 0; margin-block: 1.25rem; }
 .basket-offers h4 { margin-bottom: .25rem; }
 .comparison-selection { color: var(--accent); }
+.custom-injection-box { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); display: grid; gap: 6px; }
+.custom-injection-box label { font-size: 12px; font-weight: 600; color: var(--ink); }
+.custom-injection-box textarea { resize: vertical; min-height: 76px; margin-bottom: 4px; font-family: monospace; font-size: 12px; }
+.custom-injection-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
