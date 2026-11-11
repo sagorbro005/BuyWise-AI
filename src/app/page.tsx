@@ -7,6 +7,7 @@ import { categoryLabels } from '../core/categories.mjs';
 import { BasketBuilder, BasketComparison, BasketLines, type BasketEntry, type BasketResult } from './basket';
 import OfferComparison, { type Research } from './offer-comparison';
 import { ReceiptModal } from './receipt-modal';
+import { HeadroomGauge } from './headroom-gauge';
 import ThemeToggle from './theme-toggle';
 import { safeCsvCell } from '../core/csv.mjs';
 import { AgGridReact } from 'ag-grid-react';
@@ -145,6 +146,7 @@ export default function Home() {
       {data && <>
       {view === 'Workspace' && <>
         <div className="stats-row"><div className="stat"><div className="stat-label">Available to spend <Wallet size={16}/></div><div className="stat-number">{money(remaining)}<span>USD</span></div><small>{data.mandate ? `${money(data.mandate.budgetCents)} mandate · ${money(data.reservedCents)} reserved` : 'Confirm a mandate to get started'}</small></div><div className="stat"><div className="stat-label">Sandbox spending <ArrowUpRight size={16}/></div><div className="stat-number">{money(data.spentCents)}</div><small>{data.intents.filter(i => i.status === 'captured').length} completed purchases</small></div><div className="stat"><div className="stat-label">Unsafe proposals blocked <ShieldCheck size={16}/></div><div className="stat-number">{String(blocked).padStart(2, '0')}<span className="small-badge">AgentGuard</span></div><small>Includes clearly labeled attack tests</small></div></div>
+        <HeadroomGauge mandate={data.mandate} spentCents={data.spentCents} reservedCents={data.reservedCents} intents={data.intents}/>
         <div className="workspace-grid"><section className="shopping-column">
           <section className="agent-card"><div className="section-kicker"><span className="ai-mark"><Sparkles size={17}/></span> YOUR PURCHASING ASSISTANT <span className={`connection-badge ${data.config.ai ? 'connected' : ''}`}>{data.config.ai ? 'Gemini connected' : 'AI setup needed'}</span></div><h2>What does your team need?</h2><p>Compare products in the BuyWise Demo Store using your approved category and spending limits.</p><label className="sr-only" htmlFor="request">Shopping request</label><textarea id="request" value={query} maxLength={1000} disabled={busy === 'research'} onChange={e => { setQuery(e.target.value); setResearch(null); }} rows={2}/><div className="composer-footer"><span><LockKeyhole size={13}/> Your mandate stays in control</span><button type="button" className="button primary" disabled={!!busy || !mandateUsable} onClick={() => void task('research', async () => { setResearch(null); setResearch(await api<Research | BasketResult>('agent/propose', { query })); })}>{busy === 'research' ? <LoaderCircle className="spin" size={16}/> : <Sparkles size={16}/>} Find my best fit <ArrowRight size={16}/></button></div>
           </section>

@@ -195,8 +195,40 @@ body { background: var(--paper); color: var(--ink); }
 .receipt-hash-secondary { margin-top: 8px; }
 .receipt-sheet-footer { margin-top: 18px; padding-top: 12px; border-top: 1px solid #dce1ee; font-size: 11px; color: #57637b; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 @media (max-width: 680px) { .receipt-meta-grid { grid-template-columns: 1fr; } .receipt-header-meta { text-align: left; } .receipt-sheet { padding: 20px; } }
+.headroom-panel { margin-bottom: 24px; padding: 18px 20px; display: grid; gap: 14px; }
+.headroom-header { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+.headroom-title-group { display: flex; align-items: center; gap: 12px; }
+.headroom-icon { width: 38px; height: 38px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex-shrink: 0; }
+.headroom-title-group h2 { margin: 0; font-size: 16px; }
+.headroom-title-group p { margin: 2px 0 0; font-size: 11px; color: var(--muted); }
+.headroom-metrics { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.headroom-status-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; background: var(--inset); color: var(--muted); }
+.headroom-status-pill.healthy { background: var(--teal-soft); color: var(--teal); }
+.headroom-status-pill.warning { background: var(--amber-soft); color: var(--amber); }
+.headroom-status-pill.critical, .headroom-status-pill.inactive { background: var(--danger-soft); color: var(--danger); }
+.headroom-pct { font-size: 20px; letter-spacing: -.5px; color: var(--ink); }
+.headroom-pct span { font-size: 11px; font-weight: 500; color: var(--muted); }
+.headroom-track { height: 12px; background: var(--inset); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; display: flex; }
+.headroom-seg-captured { background: var(--teal); height: 100%; transition: width .35s ease; }
+.headroom-seg-reserved { background: repeating-linear-gradient(-45deg, var(--amber), var(--amber) 6px, color-mix(in srgb, var(--amber) 75%, transparent) 6px, color-mix(in srgb, var(--amber) 75%, transparent) 12px); height: 100%; transition: width .35s ease; }
+.headroom-legend { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; font-size: 12px; }
+.legend-item { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.legend-item strong { color: var(--ink); }
+.legend-item small { color: var(--muted); font-size: 11px; }
+.legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.legend-dot.captured { background: var(--teal); }
+.legend-dot.reserved { background: var(--amber); }
+.legend-dot.available { background: var(--border); }
+.headroom-categories { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.headroom-cat-pill { border: 1px solid var(--border); border-radius: 9px; padding: 10px 12px; background: var(--inset); display: grid; gap: 6px; }
+.headroom-cat-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
+.headroom-cat-name { font-weight: 600; color: var(--ink); }
+.headroom-cat-legacy { font-weight: 400; font-size: 11px; color: var(--muted); }
+.headroom-cat-bar { height: 6px; background: var(--surface); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
+.headroom-cat-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width .35s ease; }
+.headroom-cat-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); }
 @media print {
-  .sidebar, .topbar, .page-title, .stats-row, .workspace-grid, .guard-page, .activity-panel, .timeline-panel, .settings-grid, .setup-guide, .page-footer, .receipt-modal-toolbar, .message { display: none; }
+  .sidebar, .topbar, .page-title, .stats-row, .headroom-panel, .workspace-grid, .guard-page, .activity-panel, .timeline-panel, .settings-grid, .setup-guide, .page-footer, .receipt-modal-toolbar, .message { display: none; }
   .main-shell { margin-left: 0; background: #ffffff; }
   .main-shell main { padding: 0; }
   .receipt-modal-backdrop { position: static; background: #ffffff; padding: 0; }

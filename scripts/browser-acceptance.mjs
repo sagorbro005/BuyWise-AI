@@ -22,7 +22,11 @@ try {
   await page.locator('article').filter({ hasText: 'Hush 75 Wireless' }).getByRole('button', { name: 'Review purchase' }).click();
   await page.getByRole('heading', { name: 'Review your purchase' }).waitFor();
   assert.match(await page.locator('.checkout-summary').textContent(), /\$245\.00/);
+  assert.match(await page.locator('.headroom-panel').textContent(), /82% utilized/);
+  assert.match(await page.locator('.headroom-panel').textContent(), /Reserved hold:\s*\$245\.00/);
+  assert.match(await page.locator('.headroom-panel').textContent(), /Available headroom:\s*\$55\.00/);
   await page.getByRole('button', { name: 'Cancel purchase' }).click();
+  await page.locator('.headroom-pct', { hasText: '0%' }).waitFor();
   await page.getByRole('button', { name: 'Activity', exact: true }).click();
   await page.getByRole('heading', { name: 'Decision trail' }).waitFor();
   await page.getByLabel('Search audit events').fill('attack');
