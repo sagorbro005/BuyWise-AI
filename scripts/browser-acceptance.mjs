@@ -105,6 +105,10 @@ try {
   assert.match(await page.locator('.attack-result').innerText(), /Role impersonation/);
   assert.match(await page.locator('.attack-result').innerText(), /Instruction override/);
   console.log('Browser passed: interactive custom injection testing in AgentGuard Lab.');
+  await page.getByText('Complete a PayPal Sandbox purchase first', { exact: false }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Simulate Replay Attack' }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Simulate Tampered Webhook' }).isDisabled(), true);
+  console.log('Browser passed: webhook attack lab stays locked until a confirmed PayPal purchase exists.');
 } finally {
   await browser.close();
 }

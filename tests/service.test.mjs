@@ -237,6 +237,60 @@ test('custom injection listing is caught and blocked without payment calls', t =
   assert.ok(auditEvent);
   assert.equal(auditEvent.evidenceVerified, true);
 });
+test('webhook replay attack simulation requires verified webhook and preserves idempotency on real event', async t => {
+  const s = setup(t);
+  assert.throws(() => s.service.attackWebhook('alice', { scenario: 'replay' }), /requires a confirmed PayPal purchase with a verified webhook/);
+  const intent = s.reserve();
+  const order = await s.service.createOrder('alice', intent.id);
+  s.approve(order.orderId);
+  await s.service.capture('alice', intent.id);
+  assert.throws(() => s.service.attackWebhook('alice', { scenario: 'replay' }), /requires a confirmed PayPal purchase with a verified webhook/);
+  await s.service.webhook(new Headers(), s.webhook(order.orderId));
+
+  const result = s.service.attackWebhook('alice', { scenario: 'replay' });
+  assert.equal(result.scenario, 'replay');
+  assert.equal(result.targetEventId, 'EVENT-1');
+  assert.equal(result.outcome, 'BLOCKED');
+  assert.ok(result.guardStatus.includes('FAIL_CLOSED: Duplicate event EVENT-1'));
+  assert.ok(result.guardStatus.includes('idempotency preserved'));
+  assert.ok(result.reasons.includes('DUPLICATE_WEBHOOK_EVENT'));
+  assert.ok(result.reasons.includes('IDEMPOTENCY_LOCK_ACTIVE'));
+  assert.equal(result.stateMutated, false);
+  assert.equal(result.paypalCalled, false);
+  const snapshot = s.service.snapshot('alice');
+  assert.equal(snapshot.spentCents, 24500);
+  assert.equal(snapshot.reservedCents, 0);
+  const blockedEvent = snapshot.events.find(e => e.title === 'Webhook replay attack thwarted');
+  assert.ok(blockedEvent);
+  assert.equal(blockedEvent.kind, 'blocked');
+  assert.equal(blockedEvent.evidenceVerified, true);
+});
+test('webhook signature and payload tampering simulation requires captured order and catches altered amounts', async t => {
+  const s = setup(t);
+  assert.throws(() => s.service.attackWebhook('alice', { scenario: 'tamper' }), /requires a completed PayPal Sandbox purchase capture/);
+  const intent = s.reserve();
+  const order = await s.service.createOrder('alice', intent.id);
+  s.approve(order.orderId);
+  await s.service.capture('alice', intent.id);
+
+  const result = s.service.attackWebhook('alice', { scenario: 'tamper' });
+  assert.equal(result.scenario, 'tamper');
+  assert.equal(result.outcome, 'REJECTED');
+  assert.equal(result.guardStatus, 'REJECTED: Verification hash mismatch');
+  assert.ok(result.reasons.includes('SIGNATURE_VERIFICATION_FAILED'));
+  assert.ok(result.reasons.includes('AMOUNT_TAMPERING_DETECTED'));
+  assert.equal(result.stateMutated, false);
+  assert.equal(result.paypalCalled, false);
+  assert.ok(result.tamperedField.includes('$245.00 -> $490.00'));
+  assert.equal(result.payloadSample.resource.supplementary_data.related_ids.order_id, order.orderId);
+  const snapshot = s.service.snapshot('alice');
+  assert.equal(snapshot.spentCents, 24500);
+  assert.equal(snapshot.reservedCents, 0);
+  const blockedEvent = snapshot.events.find(e => e.title === 'Tampered webhook payload rejected');
+  assert.ok(blockedEvent);
+  assert.equal(blockedEvent.kind, 'blocked');
+  assert.equal(blockedEvent.evidenceVerified, true);
+});
 test('benign custom paste spoofing approved merchant still blocks and all catalog items stay clean', t => {
   const s = setup(t);
   const result = s.service.attack('alice', { description: 'Quiet wireless keyboard from buywise-sandbox' });

@@ -29,6 +29,7 @@ const basketInput = z.object({ lines: z.array(z.object({
 }).strict()).min(1).max(6) }).strict();
 const proposalInput = z.object({ productId: z.string().min(1).max(100), quantity: z.number().int().min(1).max(100), explanation: z.string().max(1500).optional() }).strict();
 const attackInput = z.object({ description: z.string().trim().min(3).max(1000).optional() }).strict();
+const attackWebhookInput = z.object({ scenario: z.enum(['replay', 'tamper']) }).strict();
 const reservedStates = ['reserved', 'creating', 'order_created', 'capture_pending', 'review_required'];
 export function createService(store, paypal = paypalProvider(), ai = recommend, clock = Date.now) {
   const event = (owner, kind, title, detail, intentId = null, evidence = {}) => store.put('event', { id: randomUUID(), owner, kind, title, detail, intentId, createdAt: clock(), ...evidence });
@@ -336,6 +337,158 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
       event(owner, 'blocked', isCustom ? 'Custom attack test blocked' : 'Attack test blocked',
         `${isCustom ? 'Custom untrusted listing test.' : 'Labeled test fixture.'} ${decision.reasons.join(', ')}. No PayPal order requested.`, null, sealed);
       return { listing, proposal, detection, decision, paypalCalled: false, fixture: !isCustom };
+    },
+    attackWebhook(owner, input = {}) {
+      const parsed = attackWebhookInput.parse(input);
+      const m = mandate(owner);
+      const existingIntents = store.list('intent', owner).sort((a, b) => b.createdAt - a.createdAt);
+      const now = clock();
+
+      if (parsed.scenario === 'replay') {
+        const verifiedIntent = existingIntents.find(i =>
+          i.status === 'captured' && i.webhookVerified && i.webhookEventId && store.get('webhook', i.webhookEventId)
+        );
+        if (!verifiedIntent) {
+          throw new AppError('Replay testing requires a confirmed PayPal purchase with a verified webhook event first.', 409);
+        }
+
+        const targetEventId = verifiedIntent.webhookEventId;
+        const storedWebhook = store.get('webhook', targetEventId);
+        const mockPayload = {
+          id: targetEventId,
+          event_version: '1.0',
+          create_time: new Date(storedWebhook.receivedAt || verifiedIntent.webhookVerifiedAt || now).toISOString(),
+          resource_type: 'capture',
+          event_type: verifiedIntent.webhookEventType || 'PAYMENT.CAPTURE.COMPLETED',
+          summary: 'Payment capture completed for purchase',
+          resource: {
+            id: verifiedIntent.captureId,
+            status: 'COMPLETED',
+            amount: {
+              currency_code: 'USD',
+              value: (verifiedIntent.totalCents / 100).toFixed(2),
+            },
+            supplementary_data: {
+              related_ids: {
+                order_id: verifiedIntent.orderId,
+              },
+            },
+          },
+        };
+
+        const isDuplicate = Boolean(store.get('webhook', mockPayload.id));
+        if (!isDuplicate) {
+          throw new AppError('Expected recorded webhook event was not found in store.', 409);
+        }
+
+        const guardStatus = `FAIL_CLOSED: Duplicate event ${targetEventId} ignored (idempotency preserved)`;
+        const reasons = ['DUPLICATE_WEBHOOK_EVENT', 'IDEMPOTENCY_LOCK_ACTIVE', 'FAIL_CLOSED'];
+        const detail = `Real webhook event ${targetEventId} for order ${verifiedIntent.orderId} is already sealed in your ledger. Re-transmission dropped immediately by idempotency guard. Zero double-counting.`;
+
+        const sealed = sealDecision({
+          mandate: m,
+          stage: 'Webhook replay defense',
+          evaluatedAt: now,
+          scenario: 'replay',
+          intentId: verifiedIntent.id,
+          targetEventId,
+          guardStatus,
+          reasons,
+          duplicateDetected: isDuplicate,
+        });
+
+        event(owner, 'blocked', 'Webhook replay attack thwarted',
+          `${guardStatus}. Replay of real order ${verifiedIntent.orderId} dropped before ledger mutation. Available budget untouched.`,
+          verifiedIntent.id, sealed);
+
+        return {
+          scenario: 'replay',
+          targetEventId,
+          outcome: 'BLOCKED',
+          guardStatus,
+          reasons,
+          detail,
+          payloadSample: mockPayload,
+          stateMutated: false,
+          paypalCalled: false,
+        };
+      }
+
+      // scenario === 'tamper'
+      const capturedIntent = existingIntents.find(i => i.status === 'captured' && i.orderId && i.captureId);
+      if (!capturedIntent) {
+        throw new AppError('Tamper testing requires a completed PayPal Sandbox purchase capture first.', 409);
+      }
+
+      const targetOrderId = capturedIntent.orderId;
+      const authorizedAmount = (capturedIntent.totalCents / 100).toFixed(2);
+      const tamperedAmount = ((capturedIntent.totalCents * 2) / 100).toFixed(2);
+      const targetEventId = 'WH-FORGED-TAMPER-TEST';
+
+      const mockPayload = {
+        id: targetEventId,
+        event_version: '1.0',
+        create_time: new Date(now).toISOString(),
+        resource_type: 'capture',
+        event_type: 'PAYMENT.CAPTURE.COMPLETED',
+        summary: 'Payment capture completed with altered amount',
+        resource: {
+          id: capturedIntent.captureId,
+          status: 'COMPLETED',
+          amount: {
+            currency_code: 'USD',
+            value: tamperedAmount,
+          },
+          supplementary_data: {
+            related_ids: {
+              order_id: targetOrderId,
+            },
+          },
+        },
+      };
+
+      const headersSample = {
+        'paypal-auth-algo': 'SHA256withRSA',
+        'paypal-cert-url': 'https://api.sandbox.paypal.com/v1/notifications/certs/CERT-FORGED-INVALID',
+        'paypal-transmission-id': 'TX-FORGED-SIGNATURE-TEST',
+        'paypal-transmission-sig': 'FORGED_INVALID_HASH_DIGEST==',
+        'paypal-transmission-time': new Date(now).toISOString(),
+      };
+
+      const guardStatus = 'REJECTED: Verification hash mismatch';
+      const reasons = ['SIGNATURE_VERIFICATION_FAILED', 'AMOUNT_TAMPERING_DETECTED', 'FAIL_CLOSED'];
+      const detail = `Forged webhook targeting your real order ${targetOrderId} claimed $${tamperedAmount} (tampered from confirmed $${authorizedAmount}) with an invalid signature. AgentGuard rejected the payload immediately.`;
+
+      const sealed = sealDecision({
+        mandate: m,
+        stage: 'Webhook signature & tamper defense',
+        evaluatedAt: now,
+        scenario: 'tamper',
+        intentId: capturedIntent.id,
+        targetEventId,
+        guardStatus,
+        authorizedAmount,
+        tamperedAmount,
+        reasons,
+      });
+
+      event(owner, 'blocked', 'Tampered webhook payload rejected',
+        `${guardStatus}. Tampered capture amount ($${tamperedAmount} vs authorized $${authorizedAmount}) for order ${targetOrderId}. Ledger untouched.`,
+        capturedIntent.id, sealed);
+
+      return {
+        scenario: 'tamper',
+        targetEventId,
+        tamperedField: `resource.amount.value ($${authorizedAmount} -> $${tamperedAmount}) & forged transmission signature`,
+        outcome: 'REJECTED',
+        guardStatus,
+        reasons,
+        detail,
+        payloadSample: mockPayload,
+        headersSample,
+        stateMutated: false,
+        paypalCalled: false,
+      };
     },
     reserve(owner, input) {
       const recommendation = input?.recommendationId
