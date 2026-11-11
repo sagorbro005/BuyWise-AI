@@ -6,7 +6,7 @@ function toUtcIso(timestamp) {
   return typeof timestamp === 'number' && Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 }
 
-function formatUtcDisplay(timestamp) {
+export function formatUtcDisplay(timestamp) {
   if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) return null;
   const d = new Date(timestamp);
   const date = new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(d);

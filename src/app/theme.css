@@ -127,7 +127,7 @@ body { background: var(--paper); color: var(--ink); }
   .topbar { padding: 0 10px; gap: 5px; }
   .theme-switch { min-height: 34px; }
   .theme-switch svg { padding: 3px; }
-  .sandbox-pill { max-width: 76px; font-size: 10px; }
+  .sandbox-pill { max-width: 140px; font-size: 10px; }
 }
 .policy-field {
   width: 100%; padding: 9px; background: var(--inset); color: var(--ink);
@@ -227,6 +227,39 @@ body { background: var(--paper); color: var(--ink); }
 .headroom-cat-bar { height: 6px; background: var(--surface); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
 .headroom-cat-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width .35s ease; }
 .headroom-cat-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); }
+.mandate-card { padding: 20px; }
+.mandate-header { margin-bottom: 14px; padding-bottom: 14px; }
+.mandate-form { display: grid; gap: 12px; }
+.mandate-field label { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin: 0 0 5px; }
+.mandate-form .policy-field { margin: 0; height: 38px; padding: 0 11px; border-radius: 8px; font-size: 12.5px; }
+.mandate-form .money-input { margin: 0; height: 40px; padding: 0 11px; border-radius: 8px; }
+.mandate-form .money-input input { font-size: 16px; }
+.mandate-form .form-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; align-items: end; }
+.mandate-form .form-pair > div { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
+.mandate-form .form-pair label { font-size: 11px; font-weight: 600; line-height: 1.3; margin: 0 0 5px; }
+.mandate-form .form-pair input, .mandate-form .form-pair select { height: 38px; padding: 0 10px; border-radius: 8px; font-size: 12px; color: var(--ink); }
+.mandate-form .basket-permissions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 10px; margin: 0; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--inset); }
+.mandate-form .basket-permissions legend { font-size: 11px; font-weight: 600; color: var(--muted); padding: 0 6px; }
+.mandate-form .basket-permissions label { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 11.5px; font-weight: 500; color: var(--ink); cursor: pointer; }
+.mandate-form .basket-permissions input[type=checkbox] { width: 14px; height: 14px; margin: 0; flex-shrink: 0; accent-color: var(--accent); }
+.mandate-form details { border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; background: var(--inset); font-size: 11.5px; }
+.mandate-form details summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+.mandate-form details label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 11.5px; color: var(--ink); }
+.mandate-form details input { width: 64px; height: 30px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); font-size: 12px; }
+.mandate-form .mandate-rule { margin: 0; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--inset); display: flex; gap: 10px; align-items: center; }
+.mandate-form .mandate-rule label { margin: 0; font-size: 11.5px; color: var(--ink); font-weight: 600; }
+.mandate-form .mandate-rule small { font-size: 10.5px; margin-top: 2px; }
+.mandate-form .mandate-rule input[type=checkbox] { width: 15px; height: 15px; margin: 0; flex-shrink: 0; accent-color: var(--accent); }
+.mandate-form .mandate-submit { margin-top: 2px; height: 40px; border-radius: 8px; font-size: 12px; }
+.mandate-form .mandate-footnote { margin-top: 0; }
+.mandate-revoke { margin-top: 10px; width: 100%; justify-content: center; }
+.activity-panel, .timeline-panel { padding: 20px 22px; }
+.grid-table-compact { height: 290px; margin-top: 8px; }
+.audit-search-label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); max-width: 360px; margin-bottom: 10px; }
+.audit-search-label .policy-field { margin: 0; height: 36px; padding: 0 10px; border-radius: 8px; font-size: 12.5px; }
+.mono-cell { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; letter-spacing: -0.01em; }
+.grid-table-compact .ag-cell { display: flex; align-items: center; line-height: 1.35; }
+.grid-table-compact .ag-header-cell-label { font-family: 'Manrope', 'DM Sans', sans-serif; font-weight: 700; letter-spacing: 0.01em; }
 @media print {
   .sidebar, .topbar, .page-title, .stats-row, .headroom-panel, .workspace-grid, .guard-page, .activity-panel, .timeline-panel, .settings-grid, .setup-guide, .page-footer, .receipt-modal-toolbar, .message { display: none; }
   .main-shell { margin-left: 0; background: #ffffff; }

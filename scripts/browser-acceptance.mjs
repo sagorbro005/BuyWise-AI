@@ -27,8 +27,17 @@ try {
   assert.match(await page.locator('.headroom-panel').textContent(), /Available headroom:\s*\$55\.00/);
   await page.getByRole('button', { name: 'Cancel purchase' }).click();
   await page.locator('.headroom-pct', { hasText: '0%' }).waitFor();
+  assert.match(await page.locator('.sandbox-pill').textContent(), /AI Purchasing Assistant/);
+  assert.equal(await page.getByRole('button', { name: /Connections & setup/i }).count(), 0);
+  assert.equal(await page.locator('.agent-card .connection-badge').count(), 0);
   await page.getByRole('button', { name: 'Activity', exact: true }).click();
   await page.getByRole('heading', { name: 'Decision trail' }).waitFor();
+  assert.match(await page.locator('.timeline time').first().textContent(), /\d{2}:\d{2}:\d{2} UTC$/);
+  const gridHasHorizontalScroll = await page.evaluate(() => {
+    const viewports = Array.from(document.querySelectorAll('.grid-table-compact .ag-body-horizontal-scroll-viewport'));
+    return viewports.some(v => v.scrollWidth > v.clientWidth + 2);
+  });
+  assert.equal(gridHasHorizontalScroll, false);
   await page.getByLabel('Search audit events').fill('attack');
   await page.locator('.timeline-panel .ag-row').filter({ hasText: 'Attack test blocked' }).waitFor();
   await page.waitForFunction(() => document.querySelectorAll('.timeline-panel .ag-row').length === 1);
