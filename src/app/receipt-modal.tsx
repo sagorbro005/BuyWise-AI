@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { Check, Download, FileCode2, Printer, ShieldCheck, X } from 'lucide-react';
 import { buildProcurementReceipt, renderPrintableReceiptHtml } from '@/core/receipt.mjs';
 
@@ -60,6 +61,14 @@ export function ReceiptModal({
 }) {
   const receipt = buildProcurementReceipt(intent, events) as ProcurementReceipt;
   const slug = (receipt.paypal.captureId || receipt.receiptId).replace(/[^a-zA-Z0-9_-]/g, '');
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
   return (
     <div className="receipt-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="receipt-modal-title">

@@ -21,8 +21,11 @@ async function readBody(request: NextRequest) {
     if (size > 65536) { await reader.cancel(); throw new AppError('Request is too large.', 413); }
     parts.push(value);
   }
-  try { return JSON.parse(Buffer.concat(parts).toString('utf8')); }
+  let parsed: unknown;
+  try { parsed = JSON.parse(Buffer.concat(parts).toString('utf8')); }
   catch { throw new AppError('Invalid JSON.'); }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new AppError('JSON object body is required.', 400);
+  return parsed as Record<string, unknown>;
 }
 
 async function handle(request: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
@@ -31,6 +34,13 @@ async function handle(request: NextRequest, ctx: { params: Promise<{ path: strin
     const store = getStore(); const service = createService(store);
     if (path === 'health' && request.method === 'GET') return NextResponse.json({ ok: true, environment: 'sandbox' });
     if (path === 'paypal/webhooks' && request.method === 'POST') {
+      store.transaction(() => {
+        const now = Date.now();
+        const rate = store.get('rate', 'webhook-global') || { id: 'webhook-global', owner: 'system', start: now, count: 0 };
+        if (now - rate.start > 60000) { rate.start = now; rate.count = 0; }
+        if (++rate.count > 60) throw new AppError('Too many webhook requests.', 429);
+        store.put('rate', rate);
+      });
       return NextResponse.json(await service.webhook(request.headers, await readBody(request)));
     }
     // Require explicit public origin behind a proxy; never trust forwarded host headers.
@@ -40,7 +50,8 @@ async function handle(request: NextRequest, ctx: { params: Promise<{ path: strin
     const localDemoEnabled = process.env.NODE_ENV === 'development' || process.env.ALLOW_LOCAL_DEMO === 'true';
     const allowedOrigins = process.env.APP_URL ? [expectedOrigin, ...(localDemoEnabled ? loopbackOrigins : [])] : loopbackOrigins;
     if (request.method !== 'GET' && !allowedOrigins.includes(request.headers.get('origin') || '')) throw new AppError('Request origin is not allowed.', 403);
-    let sid = request.cookies.get(cookieName)?.value;
+    const rawSid = request.cookies.get(cookieName)?.value;
+    let sid = rawSid && /^[a-f0-9]{64}$/.test(rawSid) ? rawSid : undefined;
     let session = sid ? store.get('session', sid) : null;
     let fresh = false;
     if (!session || session.expiresAt < Date.now()) {
@@ -75,7 +86,7 @@ async function handle(request: NextRequest, ctx: { params: Promise<{ path: strin
       else if (path === 'attack/webhook') result = service.attackWebhook(owner, body);
       else if (path === 'intents') result = service.reserve(owner, body);
       else if (['paypal/create', 'paypal/capture', 'paypal/reconcile', 'intents/cancel'].includes(path)) {
-        if (typeof body.intentId !== 'string' || body.intentId.length > 100) throw new AppError('A valid purchase ID is required.');
+        if (typeof body.intentId !== 'string' || !body.intentId || body.intentId.length > 100) throw new AppError('A valid purchase ID is required.');
         if (path === 'paypal/create') result = await service.createOrder(owner, body.intentId);
         if (path === 'paypal/capture') result = await service.capture(owner, body.intentId);
         if (path === 'paypal/reconcile') result = await service.reconcile(owner, body.intentId);

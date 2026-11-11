@@ -8,8 +8,16 @@ import { evaluateBasket } from '../core/basket.mjs';
 import { AppError, recommend, paypalProvider } from './providers.mjs';
 import { sealDecision, verifyDecision } from './decision-evidence.mjs';
 
+const noControlChars = (s) => {
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i);
+    if (code < 32 || code === 127) return false;
+  }
+  return true;
+};
+const forbiddenKeys = new Set(['__proto__', 'constructor', 'prototype']);
 const mandateInput = z.object({
-  name: z.string().trim().min(1).max(80).default('Office purchasing'),
+  name: z.string().trim().min(1).max(80).refine(noControlChars, 'Control characters are not allowed.').default('Office purchasing'),
   budgetCents: z.number().int().min(100).max(100000),
   maxPurchaseCents: z.number().int().positive().optional(),
   durationHours: z.number().int().min(1).max(168).default(24),
@@ -21,7 +29,7 @@ const mandateInput = z.object({
 }).strict().refine(m => {
   const categories = m.categories ?? (m.category ? [m.category] : []);
   return categories.length && !(m.category && m.categories) && new Set(categories).size === categories.length &&
-    Object.keys(m.categoryLimits).every(id => categories.includes(id) && m.categoryLimits[id] <= m.maxQuantity) &&
+    Object.keys(m.categoryLimits).every(id => !forbiddenKeys.has(id) && categories.includes(id) && m.categoryLimits[id] <= m.maxQuantity) &&
     (m.maxPurchaseCents ?? m.budgetCents) <= m.budgetCents;
 });
 const basketInput = z.object({ lines: z.array(z.object({
@@ -583,7 +591,12 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
       try { return applyOrder(owner, id, await paypal.capture(intent)); }
       catch (error) {
         // Keep the budget reserved: PayPal may have succeeded before the timeout.
-        store.transaction(() => { const i = owned('intent', id, owner); i.lockUntil = 0; store.put('intent', i); event(owner, 'pending', 'Payment needs reconciliation', 'Outcome is not confirmed. Budget remains reserved; check payment status.', id); });
+        store.transaction(() => {
+          const i = owned('intent', id, owner);
+          i.lockUntil = 0;
+          store.put('intent', i);
+          if (i.status !== 'captured') event(owner, 'pending', 'Payment needs reconciliation', 'Outcome is not confirmed. Budget remains reserved; check payment status.', id);
+        });
         throw error;
       }
     },
@@ -602,8 +615,10 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
       });
     },
     async webhook(headers, payload) {
+      if (typeof payload?.id !== 'string' || !payload.id || payload.id.length > 128 || typeof payload?.event_type !== 'string' || !payload.event_type || payload.event_type.length > 100) {
+        throw new AppError('Malformed webhook payload.');
+      }
       await paypal.verify(headers, payload);
-      if (typeof payload.id !== 'string' || !payload.id) throw new AppError('Missing webhook event ID.');
       if (store.get('webhook', payload.id)) return { received: true, duplicate: true };
       if (payload.event_type === 'CHECKOUT.ORDER.APPROVED') {
         const reference = store.get('order', String(payload.resource?.id || ''));

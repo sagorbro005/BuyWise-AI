@@ -35,4 +35,10 @@ check((await call('intents/cancel', { intentId: reserved.data.id })).status === 
 check((await call('bootstrap')).data.reservedCents === 0, 'cancellation releases reservation');
 if (!initial.data.config.ai) check((await call('agent/propose', { query: 'Five quiet wireless keyboards' })).status === 503, 'missing AI key produces honest setup error');
 check((await call('paypal/webhooks', { id: 'invalid', event_type: 'PAYMENT.CAPTURE.COMPLETED' })).status >= 400, 'unsigned webhook cannot succeed');
+check((await call('paypal/webhooks', {})).status === 400, 'malformed webhook payload rejected cleanly');
+check((await call('agent/propose', null)).status === 400, 'null JSON body rejected with 400');
+check((await call('mandates', [])).status === 400, 'array JSON body rejected with 400');
+check((await call('intents/cancel', { intentId: '' })).status === 400, 'empty intentId rejected with 400');
+const healthRes = await fetch(`${base}/api/health`);
+check(healthRes.headers.get('x-content-type-options') === 'nosniff' && healthRes.headers.get('x-frame-options') === 'DENY' && !healthRes.headers.get('x-powered-by'), 'security headers enforced and framework header hidden');
 console.log(`\n${checks} HTTP checks passed. No payment calls were made by this script.`);
