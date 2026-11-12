@@ -18,6 +18,9 @@ check(initial.status === 200 && initial.cookie.includes('HttpOnly') && initial.c
 check((await call('mandates', { budgetCents: 30000, maxQuantity: 5, category: 'keyboards' }, 'https://attacker.invalid')).status === 403, 'foreign origin rejected');
 check((await call('mandates', { budgetCents: 30000, maxQuantity: 5, category: 'keyboards' }, base, false)).status === 401, 'missing session rejected');
 check((await call('mandates', { budgetCents: 30000, maxQuantity: 5, category: 'keyboards' })).status === 200, 'mandate persisted');
+const sim = await call('mandates/simulate', { budgetCents: 15000, maxPurchaseCents: 5000, maxQuantity: 3, category: 'keyboards' });
+check(sim.status === 200 && sim.data.dryRun === true && sim.data.catalogSummary.riskReductionPct > 0 && (await call('bootstrap')).data.mandate.budgetCents === 30000, 'policy simulation dry-run succeeds without altering saved mandate');
+check((await call('mandates/simulate', { budgetCents: 10, maxQuantity: 5, category: 'keyboards' })).status === 400, 'simulator rejects invalid budget');
 check((await call('intents', { productId: 'hush-75', quantity: 5, priceCents: 1 })).status === 400, 'client price override rejected');
 check((await call('intents', { productId: 'type-pro', quantity: 5 })).status === 409, 'over-budget purchase rejected');
 const attack = await call('attack', {});

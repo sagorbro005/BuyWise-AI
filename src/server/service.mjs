@@ -5,6 +5,7 @@ import { evaluatePurchase } from '../core/policy.mjs';
 import { categoryIds } from '../core/categories.mjs';
 import { compareOffers, preserveCountedItems } from './comparison.mjs';
 import { evaluateBasket } from '../core/basket.mjs';
+import { simulatePolicy } from '../core/simulator.mjs';
 import { AppError, recommend, paypalProvider } from './providers.mjs';
 import { sealDecision, verifyDecision } from './decision-evidence.mjs';
 
@@ -282,6 +283,34 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
         if (previous && !store.get('mandate-version', owner + '/' + previous.version))
           store.put('mandate-version', { ...previous, id: owner + '/' + previous.version, timestamp: null, change: 'Retained earlier version' });
         return persistMandate({ id: owner, owner, name: data.name, active: true, version: (previous?.version || 0) + 1, durationHours: data.durationHours, expiresAt: clock() + data.durationHours * 3600000, requireApproval: true, currency: 'USD', merchantIds: data.merchantIds, categories: data.categories ?? [data.category], categoryLimits: data.categoryLimits, maxQuantity: data.maxQuantity, budgetCents: data.budgetCents, maxPurchaseCents: data.maxPurchaseCents ?? data.budgetCents }, 'MANDATE confirmed');
+      });
+    },
+    simulateMandate(owner, input) {
+      const data = mandateInput.parse(input);
+      const now = clock();
+      const baseline = store.get('mandate', owner);
+      const currentBalances = balances(owner);
+      const candidateMandate = {
+        name: data.name,
+        active: true,
+        durationHours: data.durationHours,
+        expiresAt: now + data.durationHours * 3600000,
+        requireApproval: true,
+        currency: 'USD',
+        merchantIds: data.merchantIds,
+        categories: data.categories ?? [data.category],
+        categoryLimits: data.categoryLimits,
+        maxQuantity: data.maxQuantity,
+        budgetCents: data.budgetCents,
+        maxPurchaseCents: data.maxPurchaseCents ?? data.budgetCents,
+      };
+      return simulatePolicy({
+        candidateMandate,
+        baselineMandate: baseline,
+        intents: store.list('intent', owner),
+        products: catalog,
+        alreadyCommittedCents: currentBalances.spentCents + currentBalances.reservedCents,
+        now,
       });
     },
     revoke(owner) {
