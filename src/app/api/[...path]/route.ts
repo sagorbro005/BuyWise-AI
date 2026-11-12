@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getStore } from '@/server/store.mjs';
 import { createService } from '@/server/service.mjs';
 import { configuration, AppError } from '@/server/providers.mjs';

@@ -70,8 +70,8 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
   function persistMandate(record, title) {
     const timestamp = clock();
     store.put('mandate', record);
-    store.put('mandate-version', { ...record, id: record.owner + '/' + record.version, timestamp, change: title });
-    event(record.owner, 'policy', title, 'Version ' + record.version + ' · ' + (record.name || 'Office purchasing'));
+    store.put('mandate-version', { ...record, id: `${record.owner}/${record.version}`, timestamp, change: title });
+    event(record.owner, 'policy', title, `Version ${record.version} · ${record.name || 'Office purchasing'}`);
     return record;
   }
   function evaluate(owner, proposal, product, stage, intent, parsedRequest) {
@@ -111,8 +111,8 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
     const { decision, sealed } = intent.lines
       ? basketCheck(owner, intent.lines, stage, intent.basketRequest, intent)
       : evaluate(owner, { productId: intent.productId, quantity: intent.quantity }, intent.quote, stage, intent);
-    event(owner, decision.allowed ? 'policy' : 'blocked', stage + ' policy check', decision.allowed ? 'Allowed' : decision.reasons.join(', '), intent.id, sealed);
-    if (!decision.allowed) return new AppError('Purchase blocked: ' + decision.reasons.join(', ').toLowerCase(), 409);
+    event(owner, decision.allowed ? 'policy' : 'blocked', `${stage} policy check`, decision.allowed ? 'Allowed' : decision.reasons.join(', '), intent.id, sealed);
+    if (!decision.allowed) return new AppError(`Purchase blocked: ${decision.reasons.join(', ').toLowerCase()}`, 409);
   }
   function basketCheck(owner, entries, stage, request, intent) {
     const rules = mandate(owner);
@@ -198,7 +198,7 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
     const result = { kind: 'basket', groups, basketRequest: request, source: 'gemini', recommendationId: null };
     if (!best) {
       const missing = groups.filter(g => !g.rows.some(r => r.featureFit && !r.requestReasons.length));
-      const message = 'No suitable option for: ' + missing.map(g => g.request.productQuery).join(', ') + '. The entire basket is on hold.';
+      const message = `No suitable option for: ${missing.map(g => g.request.productQuery).join(', ')}. The entire basket is on hold.`;
       event(owner, 'agent', 'No complete basket', message);
       return { ...result, outcome: 'no_match', message, entries: [] };
     }
@@ -259,7 +259,7 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
           intent.webhookEventType = verifiedEvent.event_type;
           intent.webhookVerifiedAt = clock();
         }
-        event(owner, 'verified', 'PayPal webhook verified', verifiedEvent.event_type + ' · ' + verifiedEvent.id, intent.id);
+        event(owner, 'verified', 'PayPal webhook verified', `${verifiedEvent.event_type} · ${verifiedEvent.id}`, intent.id);
         store.put('webhook', { id: verifiedEvent.id, owner, eventType: verifiedEvent.event_type, receivedAt: clock() });
       }
       intent.lockUntil = 0;
@@ -280,8 +280,8 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
         if (balances(owner).reservedCents) throw new AppError('Resolve or cancel open purchases before changing your mandate.', 409);
         if (data.budgetCents < balances(owner).spentCents) throw new AppError('Your budget cannot be lower than completed spending.');
         const previous = store.get('mandate', owner);
-        if (previous && !store.get('mandate-version', owner + '/' + previous.version))
-          store.put('mandate-version', { ...previous, id: owner + '/' + previous.version, timestamp: null, change: 'Retained earlier version' });
+        if (previous && !store.get('mandate-version', `${owner}/${previous.version}`))
+          store.put('mandate-version', { ...previous, id: `${owner}/${previous.version}`, timestamp: null, change: 'Retained earlier version' });
         return persistMandate({ id: owner, owner, name: data.name, active: true, version: (previous?.version || 0) + 1, durationHours: data.durationHours, expiresAt: clock() + data.durationHours * 3600000, requireApproval: true, currency: 'USD', merchantIds: data.merchantIds, categories: data.categories ?? [data.category], categoryLimits: data.categoryLimits, maxQuantity: data.maxQuantity, budgetCents: data.budgetCents, maxPurchaseCents: data.maxPurchaseCents ?? data.budgetCents }, 'MANDATE confirmed');
       });
     },
@@ -317,8 +317,8 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
       return store.transaction(() => {
         const rules = mandate(owner);
         if (!rules.active) return rules;
-        if (!store.get('mandate-version', owner + '/' + rules.version))
-          store.put('mandate-version', { ...rules, id: owner + '/' + rules.version, timestamp: null, change: 'Retained earlier version' });
+        if (!store.get('mandate-version', `${owner}/${rules.version}`))
+          store.put('mandate-version', { ...rules, id: `${owner}/${rules.version}`, timestamp: null, change: 'Retained earlier version' });
         for (const i of store.list('intent', owner)) {
           if (['reserved', 'order_created'].includes(i.status))
             store.put('intent', { ...i, status: 'canceled' });
@@ -658,7 +658,7 @@ export function createService(store, paypal = paypalProvider(), ai = recommend, 
         return store.transaction(() => {
           if (store.get('webhook', payload.id)) return { received: true, duplicate: true };
           store.put('webhook', { id: payload.id, owner: reference.owner, eventType: payload.event_type, receivedAt: clock() });
-          event(reference.owner, 'verified', 'Buyer approval verified', 'PayPal order ' + order.id, reference.intentId);
+          event(reference.owner, 'verified', 'Buyer approval verified', `PayPal order ${order.id}`, reference.intentId);
           return { received: true };
         });
       }

@@ -92,7 +92,7 @@ try {
   await page.getByRole('status').filter({ hasText: 'Mandate confirmed' }).waitFor();
   await shutter.getByRole('button', { name: 'Review purchase' }).click();
   await page.getByRole('heading', { name: 'Review your purchase' }).waitFor();
-  assert.match(await page.locator('.checkout-summary').innerText(), /\$195\.00/);
+  assert.match(await page.locator('.checkout-summary').textContent(), /\$195\.00/);
   await page.getByRole('button', { name: 'Cancel purchase' }).click();
   console.log('Browser passed: filtered CSV export, mandate, attack, purchase review, cancellation, audit search, cross-tab revocation and reactivation.');
   await page.getByRole('heading', { name: 'Review your purchase' }).waitFor({ state: 'hidden' });
@@ -113,8 +113,8 @@ try {
   await page.getByLabel('Units of Desk USB Mouse').fill('3');
   await page.getByRole('button', { name: 'Review whole basket' }).click();
   await page.getByRole('heading', { name: 'Review your purchase' }).waitFor();
-  assert.match(await page.locator('.checkout-summary').innerText(), /\$287\.00/);
-  assert.match(await page.locator('.checkout-summary').innerText(), /3 × Desk USB Mouse/);
+  assert.match(await page.locator('.checkout-summary').textContent(), /\$287\.00/);
+  assert.match(await page.locator('.checkout-summary').textContent(), /3 × Desk USB Mouse/);
   await page.getByRole('button', { name: 'Cancel purchase' }).click();
   console.log('Browser passed: mixed category mandate, aggregate rejection, itemized review and cancellation.');
   await page.getByRole('button', { name: 'AgentGuard', exact: true }).click();
@@ -122,8 +122,8 @@ try {
   await page.getByRole('button', { name: 'Test custom injection' }).click();
   await page.getByText('UNTRUSTED LISTING · CUSTOM TEST', { exact: true }).waitFor();
   await page.getByText('Stopped before PayPal', { exact: true }).waitFor();
-  assert.match(await page.locator('.attack-result').innerText(), /Role impersonation/);
-  assert.match(await page.locator('.attack-result').innerText(), /Instruction override/);
+  assert.match(await page.locator('.attack-result').textContent(), /Role impersonation/);
+  assert.match(await page.locator('.attack-result').textContent(), /Instruction override/);
   console.log('Browser passed: interactive custom injection testing in AgentGuard Lab.');
   await page.getByText('Complete a PayPal Sandbox purchase first', { exact: false }).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Simulate Replay Attack' }).isDisabled(), true);
