@@ -326,6 +326,10 @@ body { background: var(--paper); color: var(--ink); }
 .basket-summary-totals strong { font-size: 15px; color: var(--ink); }
 .basket-summary-actions { display: flex; align-items: center; gap: 12px; }
 .basket-limit-warning { margin: 0; font-size: 11.5px; color: var(--danger); font-weight: 600; }
+.activity-actions-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.footer-links { display: inline-flex; align-items: center; gap: 10px; }
+.footer-link { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); text-decoration: none; font-size: 11px; font-weight: 600; transition: color .15s; }
+.footer-link:hover { color: var(--ink); }
 @media (max-width: 680px) { .simulator-kpi-grid, .forecaster-controls, .basket-grid { grid-template-columns: 1fr; } .forecast-step { grid-template-columns: 64px minmax(0, 1fr); } .step-status { grid-column: 1 / -1; text-align: left; } }
 @media print {
   .sidebar, .topbar, .page-title, .stats-row, .headroom-panel, .simulator-shell, .workspace-grid, .guard-page, .activity-panel, .timeline-panel, .settings-grid, .setup-guide, .page-footer, .receipt-modal-toolbar, .message { display: none; }

@@ -4,7 +4,7 @@
 
 BuyWise is an intelligent office procurement co-pilot with an uncompromising, dual-layer financial governance engine. While an AI assistant analyzes requests and proposes optimal equipment, an immutable, user-confirmed **MANDATE** strictly governs spending authority. **AgentGuard** deterministically validates proposals on the server side against trusted catalog data before any payment request is created, and PayPal collects buyer approval and captures sandbox funds.
 
-> **Hackathon Submission:** Built for the PayPal & AI Innovation Hackathon. Open source under the standard [MIT License](LICENSE). Verified locally with **88 automated unit/service tests**, **23 HTTP boundary checks**, and full **Playwright browser end-to-end acceptance**.
+> **Hackathon Submission:** Built for the PayPal & AI Innovation Hackathon. Open source under the standard [MIT License](LICENSE). Verified locally with **89 automated unit/service tests**, **23 HTTP boundary checks**, and full **Playwright browser end-to-end acceptance**. Includes pre-configured **Postman API Collection** and **AG Grid Community** sponsor tool integrations.
 
 ---
 
@@ -53,6 +53,10 @@ BuyWise is an intelligent office procurement co-pilot with an uncompromising, du
 ### 7. Verified Cryptographic Procurement Receipts
 * **Audit-Ready Receipts**: Modal receipt view detailing PayPal Order ID, Capture ID, itemized lines, merchant identity, and verified webhook signatures.
 * **Print & Export Support**: Printable format suitable for corporate finance recordkeeping.
+
+### 8. Official Postman API Collection Export (Sponsor Tool)
+* **Pre-Configured API Collection**: Complete [buywise.postman_collection.json](buywise.postman_collection.json) conforming to Postman Schema v2.1.0, covering 14 endpoints across 6 organized folders (System & Session, Mandate Governance, AI Assistant, Basket/Intents, PayPal Sandbox Operations, and AgentGuard Injection & Webhook Defense).
+* **Instant Web & File Export**: Downloadable directly from the BuyWise web application (*Activity* panel and footer) and served statically at `/buywise.postman_collection.json` for seamless 1-click import into Postman.
 
 ---
 
@@ -136,7 +140,7 @@ BuyWise includes a rigorous automated test harness ensuring total reliability an
 
 | Command | Scope | Result |
 | :--- | :--- | :--- |
-| `npm test` | 8 test suites covering policy, headroom, receipt, simulator, security, service, and providers | **88 / 88 passing** |
+| `npm test` | 9 test suites covering policy, headroom, receipt, simulator, security, service, providers, and postman | **89 / 89 passing** |
 | `npm run typecheck` | Strict TypeScript verification across application routes and components | **0 errors** |
 | `npm run lint` | Biome static analysis across `src/`, `tests/`, and `scripts/` | **0 errors, 0 warnings** |
 | `npm run test:http` | Real HTTP boundary tests (sessions, origins, headers, schema validation, CSRF) | **23 / 23 passing** |
@@ -202,7 +206,10 @@ PayPal webhooks require an HTTPS destination to deliver asynchronous payment eve
 ├── LICENSE                        # Standard MIT Open Source License
 ├── package.json                   # Dependencies, scripts, and Node engines
 ├── biome.json                     # Code formatting and lint configuration
+├── buywise.postman_collection.json # Official Postman Collection v2.1.0 export
 ├── THIRD_PARTY_NOTICES.md         # Open source software credits & licenses
+├── public/                        # Static assets served at root
+│   └── buywise.postman_collection.json # Downloadable Postman API collection
 ├── scripts/                       # Automation and verification test harnesses
 │   ├── browser-acceptance.mjs     # Playwright E2E browser acceptance test
 │   ├── check-connections.mjs      # Live provider credential probe
@@ -240,29 +247,7 @@ PayPal webhooks require an HTTPS destination to deliver asynchronous payment eve
     ├── csv.test.mjs               # Formula injection escaping tests
     ├── headroom.test.mjs          # Budget headroom calculation tests
     ├── policy.test.mjs            # Mandate policy evaluator tests
-    ├── providers.test.mjs         # Gemini & PayPal adapter boundary tests
-    ├── receipt.test.mjs           # Cryptographic receipt sealing tests
-    ├── security.test.mjs          # Injection & tampering defense tests
-    ├── service.test.mjs           # Full purchase lifecycle & reservation tests
-    └── simulator.test.mjs         # What-If simulator & spend forecaster tests
-```
-│   │   ├── catalog.mjs            # 36-item catalog & prompt injection detector
-│   │   ├── categories.mjs         # Product category taxonomy definitions
-│   │   ├── csv.mjs                # Safe CSV generation with formula-escape logic
-│   │   ├── headroom.mjs           # Spending headroom & budget segment math
-│   │   ├── policy.mjs             # Deterministic purchase mandate evaluation
-│   │   ├── receipt.mjs            # Cryptographic receipt generation & UTC formatting
-│   │   └── simulator.mjs          # What-If policy impact replay & spend forecasting
-│   └── server/                    # Server-side persistence & external adapters
-│       ├── comparison.mjs         # Catalog comparison matrix generator
-│       ├── decision-evidence.mjs  # SHA-256 evidence snapshot and sealing logic
-│       ├── providers.mjs          # Gemini API & PayPal REST v2 adapters
-│       ├── service.mjs            # Purchase lifecycle, reservations & reconciliation
-│       └── store.mjs              # SQLite database schemas and transactions
-└── tests/                         # Automated test suites (Node.js test runner)
-    ├── csv.test.mjs               # Formula injection escaping tests
-    ├── headroom.test.mjs          # Budget headroom calculation tests
-    ├── policy.test.mjs            # Mandate policy evaluator tests
+    ├── postman.test.mjs           # Postman Collection v2.1.0 schema tests
     ├── providers.test.mjs         # Gemini & PayPal adapter boundary tests
     ├── receipt.test.mjs           # Cryptographic receipt sealing tests
     ├── security.test.mjs          # Injection & tampering defense tests
@@ -276,7 +261,8 @@ PayPal webhooks require an HTTPS destination to deliver asynchronous payment eve
 
 * **Framework**: [Next.js 16](https://nextjs.org/) (App Router, Turbopack)
 * **Frontend**: [React 19](https://react.dev/), [TypeScript](https://www.typescriptlang.org/)
-* **Grid & Table UI**: [AG Grid Community 36](https://www.ag-grid.com/) (Free, open-source under MIT)
+* **Grid & Table UI**: [AG Grid Community 36](https://www.ag-grid.com/) (Official Sponsor Target — MIT)
+* **API Testing & Collection**: [Postman](https://www.postman.com/) (Official Sponsor Target — Collection v2.1.0)
 * **Icons**: [Lucide React](https://lucide.dev/) (MIT)
 * **Payments**: [PayPal Orders v2 API](https://developer.paypal.com/api/orders/v2/) & [JavaScript SDK v6](https://developer.paypal.com/checkout/integrate)
 * **AI Engine**: [Google Gemini 2.5 Flash](https://ai.google.dev/gemini-api/docs/structured-output) via official REST structured output

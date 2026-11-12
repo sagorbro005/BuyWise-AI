@@ -6,6 +6,7 @@ BuyWise's own source is under the root MIT LICENSE. Third-party components retai
 | --- | --- | --- |
 | Next.js, React, React DOM | Web application | MIT, package LICENSE files |
 | AG Grid Community and React wrapper | Audit and payment grids | MIT, package LICENSE files. No Enterprise or Studio package used. |
+| Postman Collection v2.1.0 | API testing and endpoint evaluation | Postman Collection Schema v2.1.0 specification |
 | TypeScript | Type checking | Apache-2.0, package LICENSE.txt |
 | Zod | Input validation | MIT, package LICENSE |
 | Lucide React | Icons | ISC, package LICENSE |
