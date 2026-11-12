@@ -16,7 +16,8 @@ try {
   }
   await page.getByLabel('Per-purchase cap ($)', { exact: true }).fill('260');
   await page.getByRole('button', { name: 'Simulate Impact' }).click();
-  await page.getByText('Dry Run · Database unchanged', { exact: true }).waitFor();
+  await page.getByText('WHAT-IF POLICY SIMULATOR', { exact: true }).waitFor();
+  assert.equal(await page.getByText('Dry Run · Database unchanged').count(), 0);
   assert.match(await page.locator('.forecast-verdict').textContent(), /runs out on Order #2/);
   await page.getByLabel('Simulated unit price').fill('20');
   assert.match(await page.locator('.forecast-verdict').textContent(), /Supports 3 full orders/);
@@ -82,7 +83,7 @@ try {
   assert.deepEqual(saved.merchantIds, []);
   assert.equal(saved.maxPurchaseCents, saved.budgetCents);
   assert.equal(saved.durationHours, 24);
-  assert.equal(await page.locator('.product-card').count(), 3);
+  assert.equal(await page.locator('.product-card').count(), 6);
   const shutter = page.locator('.product-card').filter({ hasText: 'Shutter HD' });
   await shutter.getByRole('button', { name: 'Review purchase' }).click();
   await page.getByRole('alert').filter({ hasText: 'MERCHANT_NOT_ALLOWED' }).waitFor();

@@ -1,5 +1,6 @@
 export default {
   poweredByHeader: false,
+  devIndicators: false,
   allowedDevOrigins: process.env.APP_URL ? [new URL(process.env.APP_URL).hostname] : [],
   serverExternalPackages: ['node:sqlite'],
   async headers() {

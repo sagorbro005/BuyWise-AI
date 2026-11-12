@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { OfferGrid, type Research } from './offer-comparison';
+import { categoryLabels } from '../core/categories.mjs';
 
 const price = (cents: number) => (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 type Product = { id: string; category: string; name: string; unitPriceCents: number };
@@ -62,13 +63,85 @@ export function BasketBuilder({ products, busy, review }: {
 }) {
   const [counts, setCounts] = useState<Record<string, string>>({});
   const lines = products.filter(p => Number(counts[p.id]) > 0).map(product => ({ product, quantity: Number(counts[product.id]) }));
-  return <section className="panel comparison-panel"><h2>Build a basket</h2>
-    <form onSubmit={e => { e.preventDefault(); void review(lines.map(line => ({ productId: line.product.id, quantity: line.quantity }))); }}>
-      {products.map(p => <label className="basket-pick" key={p.id}><span>{p.name} · {price(p.unitPriceCents)} each</span>
-        <input className="policy-field" aria-label={`Units of ${p.name}`} type="number" min="0" max="50" step="1" placeholder="0"
-          value={counts[p.id] ?? ''} onChange={e => setCounts({ ...counts, [p.id]: e.target.value })}/></label>)}
-      <p>{lines.reduce((n, l) => n + l.quantity, 0)} units · <strong>{price(lines.reduce((n, l) => n + l.quantity * l.product.unitPriceCents, 0))} combined</strong></p>
-      <button className="button primary" type="submit" disabled={busy || !lines.length || lines.length > 6}>Review whole basket</button>
-      {lines.length > 6 && <p>Choose up to six product lines per basket.</p>}
-    </form></section>;
+  const totalUnits = lines.reduce((n, l) => n + l.quantity, 0);
+  const totalCents = lines.reduce((n, l) => n + l.quantity * l.product.unitPriceCents, 0);
+
+  const grouped = new Map<string, Product[]>();
+  for (const product of products) {
+    const list = grouped.get(product.category) ?? [];
+    list.push(product);
+    grouped.set(product.category, list);
+  }
+
+  return (
+    <section className="panel comparison-panel basket-builder-panel">
+      <div className="basket-builder-header">
+        <div>
+          <h2>Build a basket</h2>
+          <p className="basket-subtitle">Mix up to 6 product lines across your allowed categories.</p>
+        </div>
+        <span className="count-chip">{lines.length} / 6 lines</span>
+      </div>
+      <form
+        className="basket-builder-form"
+        onSubmit={e => {
+          e.preventDefault();
+          void review(lines.map(line => ({ productId: line.product.id, quantity: line.quantity })));
+        }}
+      >
+        <div className="basket-categories">
+          {Array.from(grouped.entries()).map(([catId, items]) => (
+            <div className="basket-category-group" key={catId}>
+              <div className="basket-category-title">
+                <strong>{categoryLabels[catId as keyof typeof categoryLabels] ?? catId}</strong>
+                <span>{items.length} items</span>
+              </div>
+              <div className="basket-grid">
+                {items.map(p => {
+                  const qty = Number(counts[p.id] || 0);
+                  return (
+                    <label className={`basket-pick-card ${qty > 0 ? 'active' : ''}`} key={p.id}>
+                      <div className="basket-pick-info">
+                        <strong>{p.name}</strong>
+                        <span>{price(p.unitPriceCents)} each</span>
+                      </div>
+                      <input
+                        className="policy-field basket-qty-input"
+                        aria-label={`Units of ${p.name}`}
+                        type="number"
+                        min="0"
+                        max="50"
+                        step="1"
+                        placeholder="0"
+                        value={counts[p.id] ?? ''}
+                        onChange={e => setCounts({ ...counts, [p.id]: e.target.value })}
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="basket-summary-bar">
+          <div className="basket-summary-totals">
+            <span>{totalUnits} {totalUnits === 1 ? 'unit' : 'units'}</span>
+            <strong>{price(totalCents)} combined</strong>
+          </div>
+          <div className="basket-summary-actions">
+            {lines.length > 0 && (
+              <button type="button" className="text-button" onClick={() => setCounts({})}>
+                Clear
+              </button>
+            )}
+            <button className="button primary" type="submit" disabled={busy || !lines.length || lines.length > 6}>
+              Review whole basket
+            </button>
+          </div>
+        </div>
+        {lines.length > 6 && <p className="basket-limit-warning">Choose up to six product lines per basket.</p>}
+      </form>
+    </section>
+  );
 }

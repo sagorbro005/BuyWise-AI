@@ -80,7 +80,7 @@ test('simulatePolicy replays historical purchases and quantifies catalog risk re
 
   assert.equal(report.dryRun, true);
   assert.ok(report.catalogSummary.riskReductionPct > 0);
-  assert.equal(report.catalogSummary.allowedSkus, 2); // hush-75 ($49) and everyday-keys ($35); type-pro ($69) blocked by $50 cap
+  assert.equal(report.catalogSummary.allowedSkus, 4); // hush-75 ($49), everyday-keys ($35), compact-65 ($42), slim-folio ($28); type-pro ($69) & ergo-split ($84) blocked by $50 cap
   assert.equal(report.historicalSummary.totalEvaluated, 2);
   assert.equal(report.historicalSummary.blockedCount, 2);
   assert.equal(report.historicalSummary.blockedSavingsCents, 14700);

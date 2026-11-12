@@ -134,7 +134,6 @@ export function PolicySimulatorModal({
               <div>
                 <div className="simulator-kicker">
                   <span>WHAT-IF POLICY SIMULATOR</span>
-                  <span className="count-chip">Dry Run · Database unchanged</span>
                 </div>
                 <h2 id="simulator-modal-title">{candidate.name} · Draft Impact &amp; Spend Forecast</h2>
               </div>

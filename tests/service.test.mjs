@@ -61,7 +61,8 @@ test('each mandate category offers distinct, priced alternatives and enforces th
   assert.equal(new Set(catalog.map(p => p.id)).size, catalog.length);
   for (const category of categoryIds) {
     const options = catalog.filter(p => p.category === category);
-    assert.ok(new Set(options.map(p => p.unitPriceCents)).size >= 3);
+    assert.equal(options.length, 6);
+    assert.ok(new Set(options.map(p => p.unitPriceCents)).size >= 6);
     const chosen = options[1];
     const service = createService(s.store, s.provider, async ({ products }) => {
       assert.deepEqual(new Set(products.map(p => p.id)), new Set(options.map(p => p.id)));
@@ -541,8 +542,8 @@ test('AI chooses a feasible combination and never reserves a partial result', as
   const i = svc.reserve('alice', { recommendationId: found.recommendationId });
   assert.equal(svc.reserve('alice', { recommendationId: found.recommendationId }).id, i.id);
   svc.cancel('alice', i.id);
-  budget = 20000;
-  const denied = await svc.research('alice', 'Both categories under two hundred dollars');
+  budget = 15000;
+  const denied = await svc.research('alice', 'Both categories under one hundred fifty dollars');
   assert.equal(denied.outcome, 'blocked');
   assert.equal(denied.recommendationId, null);
   missing = true;

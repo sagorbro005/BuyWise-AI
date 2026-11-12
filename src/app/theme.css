@@ -304,7 +304,29 @@ body { background: var(--paper); color: var(--ink); }
 .sim-badge.pass { background: var(--teal-soft); color: var(--teal); }
 .sim-badge.fail { background: var(--danger-soft); color: var(--danger); }
 .simulator-footer { display: flex; justify-content: flex-end; gap: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
-@media (max-width: 680px) { .simulator-kpi-grid, .forecaster-controls { grid-template-columns: 1fr; } .forecast-step { grid-template-columns: 64px minmax(0, 1fr); } .step-status { grid-column: 1 / -1; text-align: left; } }
+.basket-builder-panel { padding: 20px 22px; display: grid; gap: 16px; }
+.basket-builder-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.basket-builder-header h2 { margin: 0 0 3px; }
+.basket-subtitle { margin: 0; font-size: 12px; color: var(--muted); }
+.basket-builder-form { display: grid; gap: 16px; }
+.basket-categories { display: grid; gap: 16px; max-height: 440px; overflow-y: auto; padding-right: 4px; }
+.basket-category-group { display: grid; gap: 8px; }
+.basket-category-title { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.basket-category-title strong { color: var(--ink); }
+.basket-category-title span { color: var(--muted); font-size: 11px; }
+.basket-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.basket-pick-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 9px; background: var(--inset); cursor: pointer; transition: border-color .15s, background .15s; }
+.basket-pick-card.active { border-color: var(--accent); background: var(--accent-soft); }
+.basket-pick-info { min-width: 0; display: grid; gap: 2px; }
+.basket-pick-info strong { font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.basket-pick-info span { font-size: 11px; color: var(--muted); }
+.basket-qty-input { width: 62px; height: 34px; margin: 0; padding: 0 6px; text-align: center; border-radius: 7px; font-size: 12.5px; font-weight: 600; flex-shrink: 0; background: var(--surface); }
+.basket-summary-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 14px; border-top: 1px solid var(--border); }
+.basket-summary-totals { display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; color: var(--muted); }
+.basket-summary-totals strong { font-size: 15px; color: var(--ink); }
+.basket-summary-actions { display: flex; align-items: center; gap: 12px; }
+.basket-limit-warning { margin: 0; font-size: 11.5px; color: var(--danger); font-weight: 600; }
+@media (max-width: 680px) { .simulator-kpi-grid, .forecaster-controls, .basket-grid { grid-template-columns: 1fr; } .forecast-step { grid-template-columns: 64px minmax(0, 1fr); } .step-status { grid-column: 1 / -1; text-align: left; } }
 @media print {
   .sidebar, .topbar, .page-title, .stats-row, .headroom-panel, .simulator-shell, .workspace-grid, .guard-page, .activity-panel, .timeline-panel, .settings-grid, .setup-guide, .page-footer, .receipt-modal-toolbar, .message { display: none; }
   .main-shell { margin-left: 0; background: #ffffff; }

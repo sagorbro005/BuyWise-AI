@@ -6,5 +6,5 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   // Apply a saved preference before the first paint. CSS follows the system
   // preference when storage is unavailable or the user has never chosen one.
   const restoreTheme = `try{const t=localStorage.getItem('buywise-theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch{}`;
-  return <html lang="en" suppressHydrationWarning><head><script>{restoreTheme}</script></head><body>{children}</body></html>;
+  return <html lang="en" suppressHydrationWarning><head><script>{restoreTheme}</script></head><body suppressHydrationWarning>{children}</body></html>;
 }
