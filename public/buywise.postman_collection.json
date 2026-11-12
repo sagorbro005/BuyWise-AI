@@ -129,7 +129,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "agent", "propose"]
             },
-            "description": "Submits shopping requirements to the Gemini 2.5 structured JSON model, returning an offer comparison matrix and recommended items."
+            "description": "Submits shopping requirements to the Gemini 3.5 Flash structured JSON model, returning an offer comparison matrix and recommended items."
           }
         }
       ]

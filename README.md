@@ -71,7 +71,7 @@ API Boundary (Origin verification, SameSite/HttpOnly session, body limits)
   ├────────► Active Spending Mandate (User-confirmed policy constraints)
   │
   ▼
-AI Assistant (Google Gemini 2.5) ──► Proposes product ID & quantity only (Untrusted)
+AI Assistant (Google Gemini 3.5 Flash) ──► Proposes product ID & quantity only (Untrusted)
   │                                   (Zero access to payment credentials or DB)
   ▼
 AgentGuard Deterministic Engine
@@ -101,7 +101,7 @@ AG Grid Audit Ledger & Sealed SHA-256 Decision Evidence
 
 ---
 
-## 1-Minute Quickstart for Judges
+## 1-Minute Quickstart
 
 You do not need any paid services or external accounts to run and explore BuyWise. The application includes a rich offline simulation mode that demonstrates mandates, basket building, policy simulation, the headroom gauge, the injection lab, and the audit trail out of the box.
 
@@ -169,7 +169,7 @@ Populate the following variables:
 ```ini
 # Google Gemini API (Free tier from Google AI Studio)
 GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.5-flash
 
 # PayPal Sandbox REST App (developer.paypal.com)
 PAYPAL_CLIENT_ID=your_sandbox_client_id
@@ -265,7 +265,7 @@ PayPal webhooks require an HTTPS destination to deliver asynchronous payment eve
 * **API Testing & Collection**: [Postman](https://www.postman.com/) (Official Sponsor Target — Collection v2.1.0)
 * **Icons**: [Lucide React](https://lucide.dev/) (MIT)
 * **Payments**: [PayPal Orders v2 API](https://developer.paypal.com/api/orders/v2/) & [JavaScript SDK v6](https://developer.paypal.com/checkout/integrate)
-* **AI Engine**: [Google Gemini 2.5 Flash](https://ai.google.dev/gemini-api/docs/structured-output) via official REST structured output
+* **AI Engine**: [Google Gemini 3.5 Flash](https://ai.google.dev/gemini-api/docs/structured-output) via official REST structured output
 * **Database**: Node.js embedded SQLite (`node:sqlite`)
 * **Linter & Formatter**: [Biome 2.6](https://biomejs.dev/)
 * **Testing**: Node.js built-in test runner (`node:test`) & [Playwright Core](https://playwright.dev/)
